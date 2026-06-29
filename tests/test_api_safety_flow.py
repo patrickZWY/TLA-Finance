@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 os.environ.setdefault("SAFETY_RUN_TLC", "0")
+os.environ.setdefault("SAFETY_ACTION_TRANSFORMER", "block")
 
 try:
     from fastapi.testclient import TestClient
@@ -130,7 +131,7 @@ class ApiSafetyFlowTests(unittest.TestCase):
         )
         self.assertIsNotNone(warning)
         self.assertIn("finance_output_protocol_violation", warning)
-        self.assertIn("missing the required", warning)
+        self.assertIn("finance-actions block", warning)
 
     def test_safety_gate_recovers_explicit_actions_when_finance_block_is_missing(self):
         storage.init_session({"safety_policy": load_json_fixture("policy.complex_budget700_item400.json")})

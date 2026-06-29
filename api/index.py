@@ -7,11 +7,11 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-# Make the agents package importable — works both locally and on Vercel
+# Make the agents package importable for local runs.
 _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _root not in sys.path:
     sys.path.insert(0, _root)
-# Also try the directory containing this file (Vercel sometimes flattens structure)
+# Also try the directory containing this file.
 _here = os.path.dirname(os.path.abspath(__file__))
 if _here not in sys.path:
     sys.path.insert(0, _here)
@@ -20,20 +20,24 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from groq import Groq
+from openai import OpenAI
 from pydantic import BaseModel
 
 load_dotenv()
 
 from agents import budget_agent, debt_agent, goal_agent, investment_agent, storage
-from config import normalize_groq_api_key
+from config import has_openai_api_key, normalize_openai_api_key, openai_model
 from safety.agent import TlaSafetyAgentResult
 from safety.models import SafetyInputError, SafetyPolicy
-from safety.transformer import ExplicitRequestActionTransformer, FinanceActionsBlockTransformer
+from safety.transformer import (
+    ExplicitRequestActionTransformer,
+    FinanceActionsBlockTransformer,
+    OpenAIActionTransformer,
+)
 from safety.agent import TlaSafetyAgent
 from safety.validator import SafetyFinding
 
-normalize_groq_api_key()
+normalize_openai_api_key()
 
 app = FastAPI(title="Personal Finance Agent")
 
@@ -62,14 +66,14 @@ ORCHESTRATOR_SYSTEM = """You are a personal finance orchestrator. You synthesize
 specialist agents into one clear, helpful answer. Be warm, encouraging, and specific with numbers.
 Use markdown formatting for clarity.
 
-Your final answer MUST end with exactly one fenced action block:
+The safety gate reads your response semantically before any concrete money action is allowed. If you
+include a fenced action block, it must use this exact shape:
 ```finance-actions
 {"actions":[]}
 ```
 
-Merge any action blocks from specialist agents. Include only concrete executable
-money movement, trade, deposit, withdrawal, transfer, buy, sell, or swap actions.
-For educational or hypothetical recommendations, use an empty actions list."""
+Include only concrete executable money movement, trade, deposit, withdrawal, transfer, buy, sell, or
+swap actions. For educational or hypothetical recommendations, use an empty actions list."""
 
 AGENT_MAP: Dict[str, Any] = {
     "budget": (budget_agent.run, "Budget"),
@@ -165,11 +169,11 @@ def _chat(req: ChatRequest) -> ChatResponse:
     if pending_reply is not None:
         return pending_reply
 
-    client = Groq()
+    client = OpenAI()
 
     # Step 1: Route to agent(s)
     router_resp = client.chat.completions.create(
-        model="llama-3.1-8b-instant",
+        model=openai_model(),
         messages=[
             {"role": "system", "content": ROUTER_SYSTEM},
             {"role": "user", "content": req.message},
@@ -200,7 +204,7 @@ def _chat(req: ChatRequest) -> ChatResponse:
     else:
         combined = "\n\n".join(f"**{label}:**\n{resp}" for label, resp in results.items())
         synth = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
+            model=openai_model(),
             messages=[
                 {"role": "system", "content": ORCHESTRATOR_SYSTEM},
                 {"role": "user", "content": req.message},
@@ -292,7 +296,7 @@ def _check_reply_with_tla_safety(user_message: str, finance_reply: str) -> Optio
     )
 
     checker = TlaSafetyAgent(
-        transformer=FinanceActionsBlockTransformer(),
+        transformer=_semantic_action_transformer(),
         artifact_root=_safety_artifact_root(),
     )
     try:
@@ -318,7 +322,7 @@ def _check_reply_with_tla_safety(user_message: str, finance_reply: str) -> Optio
 
 
 def _recover_from_missing_actions_block(message: str, user_message: str, policy: SafetyPolicy) -> TlaSafetyAgentResult:
-    if "missing the required" not in message:
+    if "finance-actions JSON block" not in message:
         return _failed_safety_result(message, code="finance_output_protocol_violation")
 
     checker = TlaSafetyAgent(
@@ -341,7 +345,7 @@ def _recover_from_missing_actions_block(message: str, user_message: str, policy:
         code="finance_output_protocol_violation",
         severity="warning",
         message=(
-            "The finance agent omitted the required finance-actions block. "
+            "The configured deterministic parser did not find a finance-actions block. "
             "Concrete actions were recovered from the user request so policy violations could still be shown."
         ),
     )
@@ -381,9 +385,18 @@ def _safety_artifact_root() -> str:
     configured = os.getenv("SAFETY_ARTIFACT_ROOT")
     if configured:
         return configured
-    if os.getenv("VERCEL"):
-        return "/tmp/safety-runs"
     return "artifacts/safety-runs"
+
+
+def _semantic_action_transformer():
+    transformer = os.getenv("SAFETY_ACTION_TRANSFORMER", "semantic").strip().lower()
+    if transformer == "block":
+        return FinanceActionsBlockTransformer()
+    if transformer == "explicit":
+        return ExplicitRequestActionTransformer()
+    if has_openai_api_key():
+        return OpenAIActionTransformer()
+    return FinanceActionsBlockTransformer()
 
 
 def _parse_safety_decision(message: str) -> Optional[str]:
@@ -453,8 +466,7 @@ def health():
     return {"status": "ok"}
 
 
-# Serve static files locally only (Vercel handles this via CDN in production)
-if not os.getenv("VERCEL"):
-    public_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "public")
-    if os.path.isdir(public_dir):
-        app.mount("/", StaticFiles(directory=public_dir, html=True), name="static")
+# Serve static files for local development.
+public_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "public")
+if os.path.isdir(public_dir):
+    app.mount("/", StaticFiles(directory=public_dir, html=True), name="static")

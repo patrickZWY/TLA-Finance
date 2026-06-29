@@ -1,16 +1,16 @@
 """
-JSON-mode agentic loop for Groq.
-Avoids the raw <function=...> format bug in llama-3.1-8b-instant by using
-response_format=json_object instead of the tool_choice API.
+JSON-mode agentic loop for OpenAI.
+Uses response_format=json_object instead of model-native tool calls so the
+local tool dispatcher stays provider-agnostic.
 """
 import json
 from typing import Any, Callable, Dict, List
 
-from groq import Groq
+from openai import OpenAI
 
-from config import normalize_groq_api_key
+from config import normalize_openai_api_key, openai_model
 
-MODEL = "llama-3.1-8b-instant"
+MODEL = openai_model()
 MAX_STEPS = 8
 
 
@@ -42,17 +42,18 @@ To call a tool:
 To give your final answer after you have the data you need:
 {{"action": "answer", "text": "<your full helpful response in markdown>"}}
 
-Your final answer text MUST end with exactly one machine-readable action block:
+The downstream safety gate semantically extracts concrete money actions from your answer.
+If you include a machine-readable action block, it must use this exact shape:
 ```finance-actions
 {{"actions":[]}}
 ```
 
-If you propose concrete executable money movement, trade, deposit, withdrawal,
-transfer, buy, sell, or swap instructions, include each one in that JSON list:
+If you include the block and propose concrete executable money movement, trade, deposit,
+withdrawal, transfer, buy, sell, or swap instructions, include each one in that JSON list:
 {{"action":"buy|sell|swap|deposit|transfer|withdraw","amount":123,"from":"account","to":"account"}}
 
-If your response is only educational, hypothetical, descriptive, or already
-recorded by an internal bookkeeping tool, use an empty actions list. Never put
+If your response is only educational, hypothetical, descriptive, or already recorded by an
+internal bookkeeping tool, use an empty actions list when you include the block. Never put
 comments inside the JSON block.
 
 Available tools:
@@ -65,8 +66,8 @@ def run(
     tools: List[Dict],
     handle_tool: Callable[[str, Dict[str, Any]], str],
 ) -> str:
-    normalize_groq_api_key()
-    client = Groq()
+    normalize_openai_api_key()
+    client = OpenAI()
     tool_names = {t["function"]["name"] for t in tools}
     tools_description = _tools_to_description(tools)
     enhanced_system = system_prompt + LOOP_SUFFIX.format(tools_description=tools_description)

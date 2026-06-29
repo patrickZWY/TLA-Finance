@@ -27,13 +27,13 @@ if result.requires_user_decision:
 ```
 
 For simple API integrations, `agents.tla_safety_agent.run(...)` returns a
-JSON-serializable report dict. That wrapper defaults to the Groq parser because
-it is intended for prose output from the current finance agent. Pass
-`structured_json=True` when feeding it fixture-style action JSON.
+JSON-serializable report dict. The web API uses the OpenAI semantic transformer
+for normal local runs so prose such as "move $500 from checking into brokerage"
+or "purchase $200 of VTI from brokerage" is normalized before TLA generation.
+Pass `structured_json=True` when feeding it fixture-style action JSON.
 
-By default the low-level safety agent expects already-structured JSON. The
-finance app itself is now forced to end every finance-agent answer with exactly
-one deterministic action block:
+By default the low-level safety agent expects already-structured JSON. For
+deterministic tests and fixtures, the app still supports fenced action blocks:
 
 ````markdown
 ```finance-actions
@@ -49,9 +49,12 @@ For soft recommendations with no executable action:
 ```
 ````
 
-The API safety gate parses this block directly. That avoids spending another
-model call just to discover actions. A Groq fallback transformer still exists
-for legacy prose files, but it is not the normal app path.
+The API safety gate no longer depends on this block in normal local runs. It
+uses an LLM transformer to read the user request plus finance-agent response
+and emit the canonical action schema. That avoids false warnings when the
+finance-agent wording is semantically clear but the message format is imperfect.
+Set `SAFETY_ACTION_TRANSFORMER=block` to force deterministic block parsing for
+fixture tests.
 
 ```python
 from safety.agent import TlaSafetyAgent
@@ -63,7 +66,7 @@ agent = TlaSafetyAgent(transformer=FinanceActionsBlockTransformer())
 ## V1 flow
 
 1. The finance agent proposes actions.
-2. A transformer converts the proposal into normalized JSON:
+2. A semantic transformer converts the proposal into normalized JSON:
 
 ```json
 {
@@ -133,10 +136,9 @@ In the local web UI, use the **Safety policy** button in the header to set this
 policy. It is stored with the browser session data and sent to `/api/chat` on
 each request.
 
-By default, local safety artifacts are written to `artifacts/safety-runs`. On
-Vercel they default to `/tmp/safety-runs`. Set `SAFETY_ARTIFACT_ROOT` to
-override this. Set `SAFETY_RUN_TLC=0` to skip PlusCal/TLC execution during local
-UI smoke tests.
+By default, local safety artifacts are written to `artifacts/safety-runs`. Set
+`SAFETY_ARTIFACT_ROOT` to override this. Set `SAFETY_RUN_TLC=0` to skip
+PlusCal/TLC execution during local UI smoke tests.
 
 The generated TLA follows the same workflow style as the local reference model
 at `../Platypus-Model/tla-model/2-stage-platypus-v7`: keep the transition
@@ -234,6 +236,14 @@ Complex bad fixtures:
 - `fixtures/finance_reply.complex_bad.balance.md`: stays under budget but overdraws the source account.
 - `fixtures/finance_reply.flow_bad.buy_before_transfer.md`: contains the same
   amounts as the benign flow case but in an unsafe order.
+
+Natural-language semantic cases:
+
+- `fixtures/semantic_codex_cases.json`: prose-only user/agent examples paired
+  with Codex-generated canonical action JSON. These cover safe multi-action
+  plans, cumulative budget violations, unsafe order, and mixed destination plus
+  budget violations. See `docs/local_semantic_testing.md` for the local prompt
+  and workflow.
 
 TLC reports the first invariant failure it encounters for a run. The Python
 policy mirror lists all immediate findings so the user warning can explain

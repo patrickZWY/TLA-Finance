@@ -9,7 +9,7 @@ from pathlib import Path
 
 from safety.agent import TlaSafetyAgent, TlaSafetyAgentResult
 from safety.models import SafetyInputError, SafetyPolicy
-from safety.transformer import FinanceActionsBlockTransformer, GroqActionTransformer, JsonActionTransformer
+from safety.transformer import FinanceActionsBlockTransformer, JsonActionTransformer, OpenAIActionTransformer
 
 
 def main() -> int:
@@ -21,12 +21,12 @@ def main() -> int:
         "--actions",
         required=True,
         type=Path,
-        help="finance-agent output file; JSON actions by default, prose if --transformer groq",
+        help="finance-agent output file; JSON actions by default, prose if --transformer openai",
     )
     check.add_argument("--policy", required=True, type=Path, help="JSON file containing safety policy")
     check.add_argument(
         "--transformer",
-        choices=("json", "block", "groq"),
+        choices=("json", "block", "openai"),
         default="json",
         help="how to transform finance-agent output into structured actions",
     )
@@ -65,8 +65,8 @@ def _check(args: argparse.Namespace) -> int:
 
     if args.transformer == "block":
         transformer = FinanceActionsBlockTransformer()
-    elif args.transformer == "groq":
-        transformer = GroqActionTransformer()
+    elif args.transformer == "openai":
+        transformer = OpenAIActionTransformer()
     else:
         transformer = JsonActionTransformer()
     agent = TlaSafetyAgent(artifact_root=args.artifact_dir, transformer=transformer)

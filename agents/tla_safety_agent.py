@@ -5,9 +5,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from config import has_openai_api_key
 from safety.agent import TlaSafetyAgent
 from safety.models import SafetyPolicy
-from safety.transformer import FinanceActionsBlockTransformer, JsonActionTransformer
+from safety.transformer import FinanceActionsBlockTransformer, JsonActionTransformer, OpenAIActionTransformer
 
 
 def run(
@@ -22,12 +23,17 @@ def run(
 ) -> dict[str, Any]:
     """Run the TLA safety agent.
 
-    By default this wrapper expects prose from the current finance agent with a
-    required fenced `finance-actions` block. Set
+    By default this wrapper expects prose from the current finance agent and
+    semantically extracts canonical actions with the LLM transformer. Set
     `structured_json=True` for pre-normalized fixture JSON.
     """
 
-    transformer = JsonActionTransformer() if structured_json else FinanceActionsBlockTransformer()
+    if structured_json:
+        transformer = JsonActionTransformer()
+    elif has_openai_api_key():
+        transformer = OpenAIActionTransformer()
+    else:
+        transformer = FinanceActionsBlockTransformer()
     agent = TlaSafetyAgent(artifact_root=artifact_root, transformer=transformer)
     return agent.check(
         finance_agent_output,

@@ -2,7 +2,8 @@
 
 > AI-powered personal finance agent with a formal safety gate — budget, goals, investments, and debt in one chat.
 
-**Live:** https://automata-seal.vercel.app
+This project is currently local-development only. The frontend is served by the
+local FastAPI app and is available only while you run the local server.
 
 ---
 
@@ -40,7 +41,7 @@ Every proposed action the AI generates is passed through a formal verification p
 Finance Agent output
         │
         ▼
-  Action Parser          extracts structured actions from prose
+  LLM Action Extractor   reads prose semantically and emits canonical actions
         │
         ▼
   Policy Validator       checks amounts, accounts, action types against your policy
@@ -66,7 +67,11 @@ Finance Agent output
 | `allowed_destination_accounts` | Whitelist of permitted transfer targets |
 | `allowed_action_types` | Permitted verbs: `buy`, `sell`, `swap`, `deposit`, `transfer`, `withdraw` |
 
-The TLA+ spec models your accounts as finite automata — each action transitions the state, and TLC verifies that no sequence of actions violates your constraints (e.g. overdraft, unauthorized destination, budget exceeded).
+The extractor maps varied finance vocabulary such as “purchase,” “move,”
+“wire,” “liquidate,” or “rebalance” into the canonical action schema:
+`buy`, `sell`, `swap`, `deposit`, `transfer`, and `withdraw`.
+
+The TLA+ spec models your accounts as finite automata — each canonical action transitions the state, and TLC verifies that no sequence of actions violates your constraints (e.g. overdraft, unauthorized destination, budget exceeded).
 
 Artifacts (`.tla`, `.cfg`, TLC output) are saved per run under `artifacts/safety-runs/`.
 
@@ -76,7 +81,7 @@ Artifacts (`.tla`, `.cfg`, TLC output) are saved per run under `artifacts/safety
 
 ```
 AutomataSeal/
-├── api/index.py             # FastAPI backend — Vercel + localhost
+├── api/index.py             # FastAPI backend — localhost
 ├── agents/
 │   ├── budget_agent.py
 │   ├── goal_agent.py
@@ -84,7 +89,7 @@ AutomataSeal/
 │   ├── debt_agent.py
 │   ├── tla_safety_agent.py  # Safety gate entry point
 │   ├── tool_loop.py         # Shared JSON-mode agentic loop
-│   └── storage.py           # File locally, in-memory on Vercel
+│   └── storage.py           # File storage for CLI, in-memory session storage for API
 ├── safety/
 │   ├── agent.py             # TlaSafetyAgent — full pipeline orchestrator
 │   ├── models.py            # FinanceAction, SafetyPolicy data models
@@ -94,7 +99,7 @@ AutomataSeal/
 │   └── validator.py         # Policy invariant checks, SafetyFinding
 ├── public/index.html        # Chat UI
 ├── main.py                  # CLI entry point
-└── vercel.json
+└── requirements.txt
 ```
 
 ---
@@ -105,27 +110,17 @@ AutomataSeal/
 # 1. Install
 pip install -r requirements.txt
 
-# 2. Set API key (get one free at https://console.groq.com)
+# 2. Set API key
 cp .env.example .env
-# edit .env → GROQ_API_KEY=your_key
+# edit .env -> OPENAI_API_KEY=your_key
+# optional: OPENAI_MODEL=gpt-4o-mini
 
-# 3. Web app
+# 3. Local web app
 python3 -m uvicorn api.index:app --port 8000
 # open http://localhost:8000
 
 # 3b. Terminal CLI
 python3 main.py
-```
-
----
-
-## Deploy to Vercel
-
-```bash
-npm install -g vercel
-vercel                                   # link project
-vercel env add GROQ_API_KEY production   # add API key as secret
-vercel --prod                            # deploy
 ```
 
 ---
@@ -152,9 +147,9 @@ vercel --prod                            # deploy
 
 ## Tech stack
 
-- **LLM** — [Groq](https://groq.com) (`llama-3.1-8b-instant`)
+- **LLM** — OpenAI API (`OPENAI_MODEL`, default `gpt-4o-mini`)
 - **Safety** — TLA+ / PlusCal + TLC model checker
 - **Backend** — FastAPI (Python)
 - **Frontend** — Vanilla HTML/CSS/JS, [marked.js](https://marked.js.org)
-- **Hosting** — Vercel
+- **Local app** — FastAPI serves the vanilla frontend from `public/`
 - **CLI** — [Rich](https://github.com/Textualize/rich)

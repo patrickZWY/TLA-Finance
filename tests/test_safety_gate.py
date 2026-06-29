@@ -116,7 +116,7 @@ class SafetyGateTests(unittest.TestCase):
             self.assertEqual(result.transformer_usage["estimated_total_token_ceiling"], 123)
 
     def test_transformer_token_estimate_has_bounded_output_cap(self):
-        estimate = estimate_transform_tokens("system", "finance output", 512, "llama-3.1-8b-instant")
+        estimate = estimate_transform_tokens("system", "finance output", 512, "gpt-4o-mini")
         self.assertEqual(estimate["max_output_tokens"], 512)
         self.assertLess(estimate["estimated_total_token_ceiling"], 600)
 

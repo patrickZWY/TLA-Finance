@@ -6,7 +6,7 @@ import os
 import sys
 from typing import Any, Dict
 
-from groq import Groq
+from openai import OpenAI
 from dotenv import load_dotenv
 from rich.console import Console
 from rich.markdown import Markdown
@@ -15,10 +15,10 @@ from rich.prompt import Prompt
 from rich.rule import Rule
 from rich.text import Text
 
-from config import has_groq_api_key, normalize_groq_api_key
+from config import has_openai_api_key, normalize_openai_api_key, openai_model
 
 load_dotenv()
-normalize_groq_api_key()
+normalize_openai_api_key()
 
 console = Console()
 
@@ -144,12 +144,12 @@ def _get_agent_map():
 
 
 def run_orchestrator(user_message: str, conversation_history: list) -> str:
-    client = Groq()
+    client = OpenAI()
     conversation_history.append({"role": "user", "content": user_message})
 
     # Step 1: Route — use JSON mode (no tool calls, no format issues)
     router_response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
+        model=openai_model(),
         messages=[
             {"role": "system", "content": ROUTER_SYSTEM},
             {"role": "user", "content": user_message},
@@ -183,7 +183,7 @@ def run_orchestrator(user_message: str, conversation_history: list) -> str:
 
     combined = "\n\n".join(f"**{label} Agent:**\n{resp}" for label, resp in results.items())
     synth_response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
+        model=openai_model(),
         messages=[
             {"role": "system", "content": ORCHESTRATOR_SYSTEM},
             {"role": "user", "content": user_message},
@@ -245,9 +245,9 @@ HELP_TEXT = """
 
 
 def main():
-    if not has_groq_api_key():
-        console.print("[bold red]Error:[/bold red] GROQ_API_KEY or GROK_API_KEY not set.")
-        console.print("Copy [bold].env.example[/bold] to [bold].env[/bold] and add your Groq API key.")
+    if not has_openai_api_key():
+        console.print("[bold red]Error:[/bold red] OPENAI_API_KEY not set.")
+        console.print("Copy [bold].env.example[/bold] to [bold].env[/bold] and add your OpenAI API key.")
         sys.exit(1)
 
     print_welcome()
