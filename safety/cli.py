@@ -7,12 +7,14 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
+import observability
 from safety.agent import TlaSafetyAgent, TlaSafetyAgentResult
 from safety.models import SafetyInputError, SafetyPolicy
 from safety.transformer import FinanceActionsBlockTransformer, JsonActionTransformer, OpenAIActionTransformer
 
 
 def main() -> int:
+    observability.configure_logging()
     parser = argparse.ArgumentParser(description="Check finance-agent actions with TLA+ safety policy.")
     subparsers = parser.add_subparsers(dest="command", required=True)
 

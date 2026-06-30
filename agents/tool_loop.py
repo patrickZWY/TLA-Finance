@@ -4,14 +4,17 @@ Uses response_format=json_object instead of model-native tool calls so the
 local tool dispatcher stays provider-agnostic.
 """
 import json
+import logging
 from typing import Any, Callable, Dict, List
 
 from openai import OpenAI
 
 from config import normalize_openai_api_key, openai_model
+import observability
 
 MODEL = openai_model()
 MAX_STEPS = 8
+logger = logging.getLogger(__name__)
 
 
 def _tools_to_description(tools: List[Dict]) -> str:
@@ -77,19 +80,38 @@ def run(
         {"role": "user", "content": task},
     ]
 
-    for _ in range(MAX_STEPS):
-        response = client.chat.completions.create(
+    for step in range(1, MAX_STEPS + 1):
+        with observability.operation(
+            logger,
+            "tool_loop.model_call",
             model=MODEL,
-            messages=messages,
-            response_format={"type": "json_object"},
-            max_tokens=2048,
-            temperature=0.1,
-        )
+            step=step,
+        ):
+            response = client.chat.completions.create(
+                model=MODEL,
+                messages=messages,
+                response_format={"type": "json_object"},
+                max_tokens=2048,
+                temperature=0.1,
+            )
         raw = response.choices[0].message.content or "{}"
 
         try:
             parsed = json.loads(raw)
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as exc:
+            observability.log_event(
+                logger,
+                "tool_loop.parse_failure",
+                level=logging.WARNING,
+                step=step,
+                error_type=type(exc).__name__,
+            )
+            observability.log_event(
+                logger,
+                "tool_loop.outcome",
+                outcome="parse_failure",
+                steps=step,
+            )
             return raw
 
         # Normalise: if model returned a list of actions, process them all
@@ -117,14 +139,39 @@ def run(
                 final_answer = item.get("text", raw)
                 break
 
-            tool_result = handle_tool(tool_name, args)
+            with observability.operation(
+                logger,
+                "tool_loop.tool_call",
+                step=step,
+                tool_name=tool_name,
+                args=observability.payload(args),
+            ):
+                tool_result = handle_tool(tool_name, args)
             messages.append({"role": "assistant", "content": json.dumps(item)})
             messages.append({"role": "user", "content": f"Tool result for {tool_name}:\n{tool_result}"})
             tool_called = True
 
         if final_answer is not None:
+            observability.log_event(
+                logger,
+                "tool_loop.outcome",
+                outcome="final",
+                steps=step,
+            )
             return final_answer
         if not tool_called:
+            observability.log_event(
+                logger,
+                "tool_loop.outcome",
+                outcome="no_tool_called",
+                steps=step,
+            )
             return raw
 
+    observability.log_event(
+        logger,
+        "tool_loop.outcome",
+        outcome="max_steps",
+        steps=MAX_STEPS,
+    )
     return "I was unable to complete the request within the allowed steps."

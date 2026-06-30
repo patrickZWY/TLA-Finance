@@ -3,9 +3,15 @@
 from __future__ import annotations
 
 import os
+import logging
 import subprocess
+import time
 from dataclasses import dataclass
 from pathlib import Path
+
+import observability
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -77,8 +83,10 @@ def find_tla_tools_jar() -> Path | None:
 
 
 def translate_pluscal(tla_path: Path, timeout_seconds: int = 60) -> PlusCalResult:
+    start = time.perf_counter()
     jar = find_tla_tools_jar()
     if jar is None:
+        _log_subprocess(start, "pluscal", timeout_seconds, "not_configured", None)
         return PlusCalResult(
             status="not_configured",
             command=[],
@@ -109,6 +117,7 @@ def translate_pluscal(tla_path: Path, timeout_seconds: int = 60) -> PlusCalResul
             timeout=timeout_seconds,
         )
     except FileNotFoundError as exc:
+        _log_subprocess(start, "pluscal", timeout_seconds, "not_configured", None)
         return PlusCalResult(
             status="not_configured",
             command=command,
@@ -117,6 +126,7 @@ def translate_pluscal(tla_path: Path, timeout_seconds: int = 60) -> PlusCalResul
         )
     except subprocess.TimeoutExpired as exc:
         output = (exc.stdout or "") + (exc.stderr or "")
+        _log_subprocess(start, "pluscal", timeout_seconds, "timeout", None)
         return PlusCalResult(
             status="timeout",
             command=command,
@@ -126,6 +136,7 @@ def translate_pluscal(tla_path: Path, timeout_seconds: int = 60) -> PlusCalResul
 
     output = completed.stdout + completed.stderr
     status = "translated" if completed.returncode == 0 else "failed"
+    _log_subprocess(start, "pluscal", timeout_seconds, status, completed.returncode)
     return PlusCalResult(
         status=status,
         command=command,
@@ -135,8 +146,10 @@ def translate_pluscal(tla_path: Path, timeout_seconds: int = 60) -> PlusCalResul
 
 
 def run_tlc(tla_path: Path, cfg_path: Path, timeout_seconds: int = 60) -> TlcResult:
+    start = time.perf_counter()
     jar = find_tla_tools_jar()
     if jar is None:
+        _log_subprocess(start, "tlc", timeout_seconds, "not_configured", None)
         return TlcResult(
             status="not_configured",
             command=[],
@@ -167,6 +180,7 @@ def run_tlc(tla_path: Path, cfg_path: Path, timeout_seconds: int = 60) -> TlcRes
             timeout=timeout_seconds,
         )
     except FileNotFoundError as exc:
+        _log_subprocess(start, "tlc", timeout_seconds, "not_configured", None)
         return TlcResult(
             status="not_configured",
             command=command,
@@ -175,6 +189,7 @@ def run_tlc(tla_path: Path, cfg_path: Path, timeout_seconds: int = 60) -> TlcRes
         )
     except subprocess.TimeoutExpired as exc:
         output = (exc.stdout or "") + (exc.stderr or "")
+        _log_subprocess(start, "tlc", timeout_seconds, "timeout", None)
         return TlcResult(
             status="timeout",
             command=command,
@@ -188,9 +203,28 @@ def run_tlc(tla_path: Path, cfg_path: Path, timeout_seconds: int = 60) -> TlcRes
     else:
         status = "failed"
 
+    _log_subprocess(start, "tlc", timeout_seconds, status, completed.returncode)
     return TlcResult(
         status=status,
         command=command,
         returncode=completed.returncode,
         output=output,
+    )
+
+
+def _log_subprocess(
+    start: float,
+    command_kind: str,
+    timeout_seconds: int,
+    status: str,
+    returncode: int | None,
+) -> None:
+    observability.log_event(
+        logger,
+        "safety.subprocess",
+        command_kind=command_kind,
+        timeout_seconds=timeout_seconds,
+        status=status,
+        returncode=returncode,
+        duration_ms=observability.elapsed_ms(start),
     )

@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
+import logging
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
 
+import observability
 from safety.checker import run_tlc, translate_pluscal
 from safety.models import SafetyInputError, SafetyPolicy, dump_actions
 from safety.tla_generator import generate_tla, write_tla_artifacts
@@ -16,6 +19,7 @@ from safety.validator import SafetyFinding, evaluate_policy
 
 
 UserDecision = Literal["stop", "continue"]
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -31,6 +35,7 @@ class TlaSafetyAgentResult:
     pluscal: dict[str, object]
     tlc: dict[str, object]
     transformer_usage: dict[str, object]
+    observability: dict[str, object]
 
     @property
     def requires_user_decision(self) -> bool:
@@ -51,6 +56,7 @@ class TlaSafetyAgentResult:
             "pluscal": self.pluscal,
             "tlc": self.tlc,
             "transformer_usage": self.transformer_usage,
+            "observability": self.observability,
         }
 
 
@@ -79,36 +85,74 @@ class TlaSafetyAgent:
         run_name: str | None = None,
         run_model_checker: bool = True,
         user_decision: UserDecision | None = None,
+        run_id: str | None = None,
     ) -> TlaSafetyAgentResult:
+        total_start = time.perf_counter()
+        started_at = observability.now_iso()
+        stage_durations_ms: dict[str, int] = {}
+        run_id = run_id or str(observability.current_context().get("safety_run_id") or observability.new_id("safety"))
         run_name = run_name or datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         artifact_dir = self.artifact_root / run_name
         artifact_dir.mkdir(parents=True, exist_ok=True)
 
-        resolved_policy = _coerce_policy(policy)
-        actions = self.transformer.transform(finance_agent_output)
+        transformer_name = type(self.transformer).__name__
+        observability.log_event(
+            logger,
+            "safety.pipeline.start",
+            safety_run_id=run_id,
+            transformer_name=transformer_name,
+            model_checker_enabled=run_model_checker,
+            artifact_dir=str(artifact_dir),
+        )
+
+        with observability.scoped_context(safety_run_id=run_id):
+            with observability.timed_stage(stage_durations_ms, "coerce_policy"):
+                resolved_policy = _coerce_policy(policy)
+            with observability.timed_stage(
+                stage_durations_ms,
+                "transform",
+                logger,
+                "safety.pipeline.stage",
+                transformer_name=transformer_name,
+            ):
+                actions = self.transformer.transform(finance_agent_output)
         transformer_usage = getattr(self.transformer, "last_usage_estimate", {})
-        findings = evaluate_policy(actions, resolved_policy)
+        with observability.timed_stage(
+            stage_durations_ms,
+            "evaluate_policy",
+            logger,
+            "safety.pipeline.stage",
+            safety_run_id=run_id,
+            action_count=len(actions),
+        ):
+            findings = evaluate_policy(actions, resolved_policy)
 
         module_name = f"FinanceSafety_{run_name}"
-        generated = generate_tla(actions, resolved_policy, module_name)
-        tla_path, cfg_path = write_tla_artifacts(generated, artifact_dir)
+        with observability.timed_stage(stage_durations_ms, "generate_tla"):
+            generated = generate_tla(actions, resolved_policy, module_name)
+        with observability.timed_stage(stage_durations_ms, "write_artifacts"):
+            tla_path, cfg_path = write_tla_artifacts(generated, artifact_dir)
 
-        (artifact_dir / "finance_agent_output.txt").write_text(
-            finance_agent_output,
-            encoding="utf-8",
-        )
-        (artifact_dir / "normalized_actions.json").write_text(
-            json.dumps(dump_actions(actions), indent=2) + "\n",
-            encoding="utf-8",
-        )
-        (artifact_dir / "policy.json").write_text(
-            json.dumps(resolved_policy.to_json(), indent=2) + "\n",
-            encoding="utf-8",
-        )
+        with observability.timed_stage(stage_durations_ms, "write_report_inputs"):
+            (artifact_dir / "finance_agent_output.txt").write_text(
+                finance_agent_output,
+                encoding="utf-8",
+            )
+            (artifact_dir / "normalized_actions.json").write_text(
+                json.dumps(dump_actions(actions), indent=2) + "\n",
+                encoding="utf-8",
+            )
+            (artifact_dir / "policy.json").write_text(
+                json.dumps(resolved_policy.to_json(), indent=2) + "\n",
+                encoding="utf-8",
+            )
 
         if run_model_checker:
-            pluscal, tlc = self._run_formal_checks(tla_path, cfg_path, artifact_dir, findings)
+            with observability.scoped_context(safety_run_id=run_id):
+                with observability.timed_stage(stage_durations_ms, "formal_checks"):
+                    pluscal, tlc = self._run_formal_checks(tla_path, cfg_path, artifact_dir, findings)
         else:
+            stage_durations_ms["formal_checks"] = 0
             pluscal = {
                 "status": "skipped",
                 "command": [],
@@ -123,6 +167,16 @@ class TlaSafetyAgent:
             }
 
         decision = _resolve_decision(findings, user_decision)
+        observability_info: dict[str, object] = {
+            "run_id": run_id,
+            "started_at": started_at,
+            "duration_ms": observability.elapsed_ms(total_start),
+            "stage_durations_ms": stage_durations_ms,
+            "transformer_name": transformer_name,
+            "action_count": len(actions),
+            "finding_codes": [finding.code for finding in findings],
+            "model_checker_enabled": run_model_checker,
+        }
         result = TlaSafetyAgentResult(
             safe_to_execute=not findings or decision == "continue",
             decision=decision,
@@ -133,10 +187,25 @@ class TlaSafetyAgent:
             pluscal=pluscal,
             tlc=tlc,
             transformer_usage=transformer_usage,
+            observability=observability_info,
         )
         (artifact_dir / "report.json").write_text(
             json.dumps(result.to_json(), indent=2) + "\n",
             encoding="utf-8",
+        )
+        observability.log_event(
+            logger,
+            "safety.pipeline.end",
+            safety_run_id=run_id,
+            status="safe" if result.safe_to_execute else "blocked",
+            decision=result.decision,
+            duration_ms=observability_info["duration_ms"],
+            action_count=len(actions),
+            finding_count=len(findings),
+            finding_codes=observability_info["finding_codes"],
+            pluscal_status=pluscal.get("status"),
+            tlc_status=tlc.get("status"),
+            artifact_dir=str(artifact_dir),
         )
         return result
 

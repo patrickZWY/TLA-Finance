@@ -16,6 +16,7 @@ from rich.rule import Rule
 from rich.text import Text
 
 from config import has_openai_api_key, normalize_openai_api_key, openai_model
+import observability
 
 load_dotenv()
 normalize_openai_api_key()
@@ -245,6 +246,7 @@ HELP_TEXT = """
 
 
 def main():
+    observability.configure_logging()
     if not has_openai_api_key():
         console.print("[bold red]Error:[/bold red] OPENAI_API_KEY not set.")
         console.print("Copy [bold].env.example[/bold] to [bold].env[/bold] and add your OpenAI API key.")

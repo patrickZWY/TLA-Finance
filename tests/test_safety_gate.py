@@ -68,7 +68,13 @@ class SafetyGateTests(unittest.TestCase):
             self.assertTrue(result.safe_to_execute)
             self.assertEqual(result.decision, "safe")
             self.assertFalse(result.requires_user_decision)
-            self.assertTrue((Path(tmpdir) / "safe-agent-test" / "report.json").exists())
+            report_path = Path(tmpdir) / "safe-agent-test" / "report.json"
+            self.assertTrue(report_path.exists())
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+            self.assertIn("observability", report)
+            self.assertEqual(report["observability"]["action_count"], 2)
+            self.assertEqual(report["observability"]["model_checker_enabled"], False)
+            self.assertIn("formal_checks", report["observability"]["stage_durations_ms"])
 
     def test_tla_safety_agent_requires_decision_for_unsafe_actions(self):
         with TemporaryDirectory() as tmpdir:
@@ -82,6 +88,7 @@ class SafetyGateTests(unittest.TestCase):
             self.assertFalse(result.safe_to_execute)
             self.assertEqual(result.decision, "requires_user_decision")
             self.assertTrue(result.requires_user_decision)
+            self.assertIn("disallowed_destination", result.observability["finding_codes"])
 
     def test_tla_safety_agent_honors_user_continue_decision(self):
         with TemporaryDirectory() as tmpdir:

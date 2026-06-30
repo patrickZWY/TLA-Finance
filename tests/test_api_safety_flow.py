@@ -2,6 +2,7 @@ import json
 import os
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 
@@ -29,6 +30,22 @@ def load_json_fixture(name: str):
 
 def load_text_fixture(name: str) -> str:
     return (ROOT / "fixtures" / name).read_text(encoding="utf-8")
+
+
+def fake_openai_with_router_content(content: str):
+    class FakeCompletions:
+        def create(self, **kwargs):
+            return SimpleNamespace(
+                choices=[
+                    SimpleNamespace(message=SimpleNamespace(content=content)),
+                ],
+            )
+
+    class FakeOpenAI:
+        def __init__(self):
+            self.chat = SimpleNamespace(completions=FakeCompletions())
+
+    return FakeOpenAI
 
 
 @unittest.skipIf(API_IMPORT_ERROR is not None, f"API dependencies unavailable: {API_IMPORT_ERROR}")
@@ -102,6 +119,39 @@ class ApiSafetyFlowTests(unittest.TestCase):
             )
         self.assertEqual(response.status_code, 500)
         self.assertIn("Chat request failed", response.json()["detail"])
+
+    def test_chat_request_logs_selected_agents_and_safety_status(self):
+        with patch.dict(os.environ, {"OBSERVABILITY_ENABLED": "1", "LOG_FORMAT": "json"}, clear=False):
+            with patch.object(api_index, "OpenAI", fake_openai_with_router_content('{"agents":["budget"],"task":"summarize"}')):
+                with patch.dict(api_index.AGENT_MAP, {"budget": (lambda task: "Budget reply.", "Budget")}):
+                    with patch.object(api_index, "_check_reply_with_tla_safety", return_value=None):
+                        with self.assertLogs(api_index.__name__, level="INFO") as captured:
+                            response = self.client.post(
+                                "/api/chat",
+                                json={"message": "hello", "session_data": {}, "history": []},
+                            )
+        self.assertEqual(response.status_code, 200)
+        records = [json.loads(record.getMessage()) for record in captured.records]
+        processed = next(record for record in records if record["event"] == "api.chat.processed")
+        self.assertEqual(processed["selected_agents"], ["Budget"])
+        self.assertEqual(processed["safety_status"], "passed")
+
+    def test_malformed_router_json_logs_parse_failure_and_falls_back(self):
+        with patch.dict(os.environ, {"OBSERVABILITY_ENABLED": "1", "LOG_FORMAT": "json"}, clear=False):
+            with patch.object(api_index, "OpenAI", fake_openai_with_router_content("{not-json")):
+                with patch.dict(api_index.AGENT_MAP, {"budget": (lambda task: "Budget reply.", "Budget")}):
+                    with patch.object(api_index, "_check_reply_with_tla_safety", return_value=None):
+                        with self.assertLogs(api_index.__name__, level="INFO") as captured:
+                            response = self.client.post(
+                                "/api/chat",
+                                json={"message": "hello", "session_data": {}, "history": []},
+                            )
+        self.assertEqual(response.status_code, 200)
+        records = [json.loads(record.getMessage()) for record in captured.records]
+        events = {record["event"] for record in records}
+        self.assertIn("api.router.parse_failure", events)
+        processed = next(record for record in records if record["event"] == "api.chat.processed")
+        self.assertEqual(processed["requested_agents"], ["budget"])
 
     def test_safety_gate_allows_safe_finance_actions_block(self):
         storage.init_session({"safety_policy": load_json_fixture("policy.flow_budget600_item300.json")})

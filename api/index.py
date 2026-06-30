@@ -1,8 +1,10 @@
 import copy
 import json
+import logging
 import os
 import random
 import sys
+import time
 from dataclasses import replace
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -27,6 +29,7 @@ load_dotenv()
 
 from agents import budget_agent, debt_agent, goal_agent, investment_agent, storage
 from config import has_openai_api_key, normalize_openai_api_key, openai_model
+import observability
 from safety.agent import TlaSafetyAgentResult
 from safety.models import SafetyInputError, SafetyPolicy
 from safety.transformer import (
@@ -38,6 +41,9 @@ from safety.agent import TlaSafetyAgent
 from safety.validator import SafetyFinding
 
 normalize_openai_api_key()
+observability.configure_logging()
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Personal Finance Agent")
 
@@ -130,12 +136,46 @@ class SafetyDemoRequest(BaseModel):
 
 @app.post("/api/chat")
 def chat(req: ChatRequest):
-    try:
-        return _chat(req)
-    except HTTPException:
-        raise
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Chat request failed: {exc}") from exc
+    request_id = observability.new_id("req")
+    start = time.perf_counter()
+    with observability.scoped_context(request_id=request_id):
+        observability.log_event(
+            logger,
+            "api.chat.start",
+            history_len=len(req.history),
+            has_session_data=req.session_data is not None,
+            message=observability.payload(req.message),
+        )
+        try:
+            response = _chat(req)
+        except HTTPException as exc:
+            observability.log_event(
+                logger,
+                "api.chat.end",
+                level=logging.ERROR,
+                status="http_error",
+                status_code=exc.status_code,
+                duration_ms=observability.elapsed_ms(start),
+            )
+            raise
+        except Exception as exc:
+            observability.log_event(
+                logger,
+                "api.chat.end",
+                level=logging.ERROR,
+                status="error",
+                error_type=type(exc).__name__,
+                duration_ms=observability.elapsed_ms(start),
+            )
+            raise HTTPException(status_code=500, detail=f"Chat request failed: {exc}") from exc
+        observability.log_event(
+            logger,
+            "api.chat.end",
+            status="ok",
+            duration_ms=observability.elapsed_ms(start),
+            history_len=len(response.history),
+        )
+        return response
 
 
 @app.post("/api/demo/bad-suggestion")
@@ -167,35 +207,60 @@ def _chat(req: ChatRequest) -> ChatResponse:
 
     pending_reply = _handle_pending_safety_decision(req.message, history)
     if pending_reply is not None:
+        observability.log_event(
+            logger,
+            "api.chat.pending_safety",
+            status="handled",
+        )
         return pending_reply
 
     client = OpenAI()
 
     # Step 1: Route to agent(s)
-    router_resp = client.chat.completions.create(
-        model=openai_model(),
-        messages=[
-            {"role": "system", "content": ROUTER_SYSTEM},
-            {"role": "user", "content": req.message},
-        ],
-        response_format={"type": "json_object"},
-        max_tokens=200,
-        temperature=0,
-    )
-    try:
-        routing = json.loads(router_resp.choices[0].message.content)
-    except Exception:
-        routing = {"agents": ["budget"], "task": req.message}
+    model = openai_model()
+    with observability.operation(logger, "api.router.openai", model=model) as router_event:
+        router_resp = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": ROUTER_SYSTEM},
+                {"role": "user", "content": req.message},
+            ],
+            response_format={"type": "json_object"},
+            max_tokens=200,
+            temperature=0,
+        )
+        try:
+            routing = json.loads(router_resp.choices[0].message.content)
+        except Exception as exc:
+            observability.log_event(
+                logger,
+                "api.router.parse_failure",
+                level=logging.WARNING,
+                model=model,
+                error_type=type(exc).__name__,
+                duration_ms=router_event.elapsed_ms(),
+            )
+            routing = {"agents": ["budget"], "task": req.message}
 
-    agents_to_call = routing.get("agents", ["budget"])
-    task = routing.get("task", req.message)
+        agents_to_call = routing.get("agents", ["budget"])
+        task = routing.get("task", req.message)
+        router_event.add_fields(
+            selected_agents=agents_to_call,
+            parsed_agent_count=len(agents_to_call) if isinstance(agents_to_call, list) else 0,
+        )
 
     # Step 2: Call each specialist agent
     results: Dict[str, str] = {}
     for key in agents_to_call:
         if key in AGENT_MAP:
             fn, label = AGENT_MAP[key]
-            results[label] = fn(task)
+            with observability.operation(
+                logger,
+                "api.specialist_agent",
+                agent=key,
+                label=label,
+            ):
+                results[label] = fn(task)
 
     if not results:
         reply = "I'm not sure how to help with that. Try asking about budgeting, goals, investing, or debt."
@@ -216,12 +281,20 @@ def _chat(req: ChatRequest) -> ChatResponse:
         reply = synth.choices[0].message.content or combined
 
     safety_reply = _check_reply_with_tla_safety(req.message, reply)
+    safety_status = "blocked" if safety_reply is not None else "passed"
     if safety_reply is not None:
         reply = safety_reply
 
     history.append({"role": "user", "content": req.message})
     history.append({"role": "assistant", "content": reply})
 
+    observability.log_event(
+        logger,
+        "api.chat.processed",
+        selected_agents=list(results.keys()),
+        requested_agents=agents_to_call,
+        safety_status=safety_status,
+    )
     return ChatResponse(
         reply=reply,
         session_data=storage.get_session() or {},
@@ -299,17 +372,36 @@ def _check_reply_with_tla_safety(user_message: str, finance_reply: str) -> Optio
         transformer=_semantic_action_transformer(),
         artifact_root=_safety_artifact_root(),
     )
-    try:
-        result = checker.check(
-            safety_input,
-            policy,
-            run_model_checker=_should_run_tlc(),
-        )
-    except SafetyInputError as exc:
-        result = _recover_from_missing_actions_block(str(exc), user_message, policy)
-    except Exception as exc:
-        result = _failed_safety_result(str(exc))
+    start = time.perf_counter()
+    safety_run_id = observability.new_id("safety")
+    observability.log_event(
+        logger,
+        "api.safety_check.start",
+        safety_run_id=safety_run_id,
+        policy_configured=policy_configured,
+    )
+    with observability.scoped_context(safety_run_id=safety_run_id):
+        try:
+            result = checker.check(
+                safety_input,
+                policy,
+                run_model_checker=_should_run_tlc(),
+                run_id=safety_run_id,
+            )
+        except SafetyInputError as exc:
+            result = _recover_from_missing_actions_block(str(exc), user_message, policy)
+        except Exception as exc:
+            result = _failed_safety_result(str(exc))
 
+    observability.log_event(
+        logger,
+        "api.safety_check.end",
+        safety_run_id=result.observability.get("run_id", safety_run_id),
+        status="passed" if result.safe_to_execute else "blocked",
+        decision=result.decision,
+        finding_count=len(result.findings),
+        duration_ms=observability.elapsed_ms(start),
+    )
     if result.safe_to_execute:
         return None
 
@@ -329,11 +421,13 @@ def _recover_from_missing_actions_block(message: str, user_message: str, policy:
         transformer=ExplicitRequestActionTransformer(),
         artifact_root=_safety_artifact_root(),
     )
+    safety_run_id = observability.current_context().get("safety_run_id") or observability.new_id("safety")
     try:
         result = checker.check(
             user_message,
             policy,
             run_model_checker=_should_run_tlc(),
+            run_id=str(safety_run_id),
         )
     except SafetyInputError:
         return _failed_safety_result(message, code="finance_output_protocol_violation")
@@ -354,6 +448,10 @@ def _recover_from_missing_actions_block(message: str, user_message: str, policy:
         safe_to_execute=False,
         decision="requires_user_decision",
         findings=[protocol_finding, *result.findings],
+        observability={
+            **result.observability,
+            "finding_codes": [protocol_finding.code, *result.observability.get("finding_codes", [])],
+        },
     )
     (updated.artifact_dir / "report.json").write_text(
         json.dumps(updated.to_json(), indent=2) + "\n",
@@ -442,6 +540,7 @@ def _format_safety_warning(result: TlaSafetyAgentResult, policy_configured: bool
 
 def _failed_safety_result(message: str, code: str = "safety_checker_error") -> TlaSafetyAgentResult:
     artifact_root = Path(_safety_artifact_root())
+    run_id = str(observability.current_context().get("safety_run_id") or observability.new_id("safety"))
     return TlaSafetyAgentResult(
         safe_to_execute=False,
         decision="requires_user_decision",
@@ -458,6 +557,16 @@ def _failed_safety_result(message: str, code: str = "safety_checker_error") -> T
         pluscal={"status": "not_run", "command": [], "returncode": None, "output": message},
         tlc={"status": "not_run", "command": [], "returncode": None, "output": message},
         transformer_usage={},
+        observability={
+            "run_id": run_id,
+            "started_at": observability.now_iso(),
+            "duration_ms": 0,
+            "stage_durations_ms": {},
+            "transformer_name": None,
+            "action_count": 0,
+            "finding_codes": [code],
+            "model_checker_enabled": False,
+        },
     )
 
 

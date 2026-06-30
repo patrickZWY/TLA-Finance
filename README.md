@@ -77,6 +77,34 @@ Artifacts (`.tla`, `.cfg`, TLC output) are saved per run under `artifacts/safety
 
 ---
 
+## Observability
+
+The app emits structured, stdlib-only observability events through
+`observability.py`. Callers use a small facade (`log_event`, `operation`,
+`timed_stage`, and scoped context), while the emission backend is isolated
+behind an `EventSink`. The default sink writes to Python logging, and a future
+OpenTelemetry exporter should be added as a new sink instead of changing API,
+agent, or safety-gate business logic.
+
+Useful environment variables:
+
+| Variable | Default | Description |
+|---|---:|---|
+| `OBSERVABILITY_ENABLED` | `1` | Set to `0`, `false`, `no`, or `off` to disable event emission |
+| `OBSERVE_PAYLOADS` | `0` | Set to `1` to include sensitive payload fields; otherwise prompts, replies, messages, tool args, and similar text are redacted |
+| `LOG_FORMAT` | `plain` | Use `json` for machine-parseable log records |
+| `LOG_LEVEL` | `INFO` | Python logging level used by explicit entrypoint logging setup |
+
+Application entrypoints configure logging explicitly. Library-style helpers do
+not install root handlers implicitly, which keeps the observability layer
+replaceable and avoids surprising host applications.
+
+Safety reports include an additive `observability` section with run metadata,
+stage durations, transformer name, action count, finding codes, and whether TLC
+was enabled.
+
+---
+
 ## Project structure
 
 ```
@@ -98,6 +126,7 @@ AutomataSeal/
 │   ├── transformer.py       # Parses finance-agent prose → structured actions
 │   └── validator.py         # Policy invariant checks, SafetyFinding
 ├── public/index.html        # Chat UI
+├── observability.py         # Structured event facade and logging sink
 ├── main.py                  # CLI entry point
 └── requirements.txt
 ```
@@ -153,3 +182,4 @@ python3 main.py
 - **Frontend** — Vanilla HTML/CSS/JS, [marked.js](https://marked.js.org)
 - **Local app** — FastAPI serves the vanilla frontend from `public/`
 - **CLI** — [Rich](https://github.com/Textualize/rich)
+- **Observability** — Structured Python logging via a replaceable event sink
