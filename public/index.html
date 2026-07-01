@@ -3,565 +3,559 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Personal Finance Agent</title>
-  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <title>Finance Safety Workbench</title>
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
+    *, *::before, *::after { box-sizing: border-box; }
     :root {
-      --bg: #0d1117;
-      --surface: #161b22;
-      --surface2: #21262d;
-      --border: #30363d;
-      --text: #e6edf3;
-      --muted: #8b949e;
-      --accent: #58a6ff;
-      --green: #3fb950;
-      --yellow: #d29922;
-      --red: #f85149;
-      --purple: #bc8cff;
+      --bg: #0e1116;
+      --panel: #171b22;
+      --panel2: #202632;
+      --border: #343b49;
+      --text: #edf1f7;
+      --muted: #9aa4b2;
+      --accent: #6ab0ff;
+      --ok: #42c878;
+      --warn: #d7a744;
+      --bad: #ff6961;
+      --code: #0a0d12;
     }
-
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      margin: 0;
+      min-height: 100vh;
       background: var(--bg);
       color: var(--text);
-      height: 100dvh;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
     }
-
-    /* ── Header ── */
     header {
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
-      padding: 12px 20px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      flex-shrink: 0;
-    }
-    .header-left { display: flex; align-items: center; gap: 10px; }
-    .logo {
-      width: 32px; height: 32px;
-      background: linear-gradient(135deg, #1f6feb, #58a6ff);
-      border-radius: 8px;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 16px;
-    }
-    header h1 { font-size: 16px; font-weight: 600; color: var(--text); }
-    header p { font-size: 12px; color: var(--muted); margin-top: 1px; }
-    .header-actions { display: flex; gap: 8px; align-items: center; }
-    .reset-btn, .policy-btn, .demo-btn {
-      background: none; border: 1px solid var(--border);
-      color: var(--muted); padding: 5px 10px; border-radius: 6px;
-      font-size: 12px; cursor: pointer; transition: all .15s;
-    }
-    .reset-btn:hover { border-color: var(--red); color: var(--red); }
-    .policy-btn:hover { border-color: var(--accent); color: var(--accent); }
-    .demo-btn:hover { border-color: var(--yellow); color: var(--yellow); }
-
-    /* ── Agent chips ── */
-    .chips {
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
-      padding: 8px 20px;
-      display: flex; gap: 8px; overflow-x: auto;
-      flex-shrink: 0;
-    }
-    .chips::-webkit-scrollbar { display: none; }
-    .chip {
-      padding: 3px 10px; border-radius: 20px;
-      font-size: 11px; font-weight: 500;
-      border: 1px solid; white-space: nowrap;
-      letter-spacing: .3px;
-    }
-    .chip-budget  { color: var(--green);  border-color: #3fb95040; background: #3fb95012; }
-    .chip-goal    { color: var(--yellow); border-color: #d2992240; background: #d2992212; }
-    .chip-invest  { color: var(--accent); border-color: #58a6ff40; background: #58a6ff12; }
-    .chip-debt    { color: var(--red);    border-color: #f8514940; background: #f8514912; }
-
-    /* ── Chat area ── */
-    .chat {
-      flex: 1;
-      overflow-y: auto;
-      padding: 20px;
-      display: flex;
-      flex-direction: column;
       gap: 16px;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+      background: var(--panel);
     }
-    .chat::-webkit-scrollbar { width: 4px; }
-    .chat::-webkit-scrollbar-track { background: transparent; }
-    .chat::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
-
-    /* ── Welcome ── */
-    .welcome {
-      margin: auto;
-      text-align: center;
-      max-width: 480px;
-      padding: 20px;
+    h1 { margin: 0; font-size: 17px; font-weight: 650; }
+    .subtle { color: var(--muted); font-size: 12px; }
+    main {
+      display: grid;
+      grid-template-columns: minmax(330px, 0.95fr) minmax(360px, 1.05fr);
+      gap: 14px;
+      padding: 14px;
+      max-width: 1440px;
+      margin: 0 auto;
     }
-    .welcome .icon { font-size: 40px; margin-bottom: 12px; }
-    .welcome h2 { font-size: 20px; margin-bottom: 8px; }
-    .welcome p { color: var(--muted); font-size: 14px; line-height: 1.6; margin-bottom: 20px; }
-    .suggestions { display: flex; flex-direction: column; gap: 8px; text-align: left; }
-    .suggestion {
-      background: var(--surface2); border: 1px solid var(--border);
-      border-radius: 8px; padding: 10px 14px;
-      font-size: 13px; color: var(--muted); cursor: pointer;
-      transition: all .15s;
+    section {
+      border: 1px solid var(--border);
+      background: var(--panel);
+      border-radius: 8px;
+      min-width: 0;
     }
-    .suggestion:hover { border-color: var(--accent); color: var(--text); }
-    .suggestion strong { color: var(--text); display: block; margin-bottom: 2px; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; }
-
-    /* ── Messages ── */
-    .msg { display: flex; gap: 10px; max-width: 820px; width: 100%; }
-    .msg.user { align-self: flex-end; flex-direction: row-reverse; }
-    .avatar {
-      width: 28px; height: 28px; border-radius: 50%;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 13px; flex-shrink: 0; margin-top: 2px;
+    .section-head {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
     }
-    .msg.agent .avatar { background: linear-gradient(135deg, #1f6feb, #58a6ff); }
-    .msg.user  .avatar { background: var(--surface2); border: 1px solid var(--border); }
-    .bubble {
-      padding: 10px 14px; border-radius: 12px;
-      font-size: 14px; line-height: 1.65; max-width: calc(100% - 40px);
-    }
-    .msg.agent .bubble { background: var(--surface); border: 1px solid var(--border); border-top-left-radius: 4px; }
-    .msg.user  .bubble { background: #1f6feb; border-top-right-radius: 4px; }
-
-    /* Markdown inside agent bubbles */
-    .bubble h1, .bubble h2, .bubble h3 { margin: 12px 0 6px; font-size: 14px; }
-    .bubble h1:first-child, .bubble h2:first-child, .bubble h3:first-child { margin-top: 0; }
-    .bubble p { margin-bottom: 6px; }
-    .bubble p:last-child { margin-bottom: 0; }
-    .bubble ul, .bubble ol { padding-left: 18px; margin-bottom: 6px; }
-    .bubble li { margin-bottom: 3px; }
-    .bubble strong { color: #fff; }
-    .bubble code { background: #0d1117; padding: 1px 5px; border-radius: 4px; font-size: 12px; font-family: monospace; }
-    .bubble pre { background: #0d1117; padding: 10px; border-radius: 6px; overflow-x: auto; margin: 8px 0; }
-    .bubble pre code { background: none; padding: 0; }
-
-    /* ── Thinking indicator ── */
-    .thinking { display: flex; align-items: center; gap: 8px; padding: 10px 14px; }
-    .dots { display: flex; gap: 4px; }
-    .dot {
-      width: 6px; height: 6px; background: var(--muted);
-      border-radius: 50%; animation: bounce .9s infinite;
-    }
-    .dot:nth-child(2) { animation-delay: .15s; }
-    .dot:nth-child(3) { animation-delay: .3s; }
-    @keyframes bounce {
-      0%, 60%, 100% { transform: translateY(0); }
-      30% { transform: translateY(-6px); }
-    }
-
-    /* ── Input area ── */
-    .input-bar {
-      background: var(--surface);
-      border-top: 1px solid var(--border);
-      padding: 12px 20px;
-      display: flex; gap: 10px; align-items: flex-end;
-      flex-shrink: 0;
-    }
-    textarea {
-      flex: 1; background: var(--surface2);
-      border: 1px solid var(--border); border-radius: 10px;
-      color: var(--text); font-size: 14px; padding: 10px 14px;
-      resize: none; outline: none; max-height: 120px;
-      font-family: inherit; line-height: 1.5;
-      transition: border-color .15s;
-    }
-    textarea:focus { border-color: var(--accent); }
-    textarea::placeholder { color: var(--muted); }
-    .send-btn {
-      background: var(--accent); border: none; color: #0d1117;
-      width: 38px; height: 38px; border-radius: 8px;
-      cursor: pointer; font-size: 16px; flex-shrink: 0;
-      display: flex; align-items: center; justify-content: center;
-      transition: background .15s; font-weight: 700;
-    }
-    .send-btn:hover { background: #79b8ff; }
-    .send-btn:disabled { background: var(--border); color: var(--muted); cursor: not-allowed; }
-
-    /* ── Safety policy modal ── */
-    .modal-backdrop {
-      position: fixed; inset: 0; background: #010409aa;
-      display: none; align-items: center; justify-content: center;
-      padding: 18px; z-index: 10;
-    }
-    .modal-backdrop.open { display: flex; }
-    .modal {
-      width: min(560px, 100%); background: var(--surface);
-      border: 1px solid var(--border); border-radius: 8px;
-      padding: 16px; box-shadow: 0 20px 80px #0008;
-    }
-    .modal h2 { font-size: 16px; margin-bottom: 12px; }
-    .policy-grid { display: grid; gap: 10px; }
-    .policy-grid label { display: grid; gap: 5px; color: var(--muted); font-size: 12px; }
-    .policy-grid input, .policy-grid textarea {
-      width: 100%; max-height: none; min-height: 0;
-      background: var(--surface2); border: 1px solid var(--border);
-      border-radius: 6px; color: var(--text); padding: 8px;
+    h2 { margin: 0; font-size: 14px; }
+    .body { padding: 14px; display: grid; gap: 12px; }
+    label { display: grid; gap: 6px; font-size: 12px; color: var(--muted); }
+    textarea, input, select {
+      width: 100%;
+      border: 1px solid var(--border);
+      background: var(--panel2);
+      color: var(--text);
+      border-radius: 6px;
+      padding: 9px 10px;
       font: 13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      outline: none;
     }
-    .policy-grid textarea { min-height: 80px; resize: vertical; }
-    .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
-    .modal-actions button {
-      border: 1px solid var(--border); background: var(--surface2);
-      color: var(--text); padding: 7px 12px; border-radius: 6px; cursor: pointer;
+    textarea:focus, input:focus, select:focus { border-color: var(--accent); }
+    textarea { resize: vertical; min-height: 92px; line-height: 1.45; }
+    .advice { min-height: 176px; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    button {
+      border: 1px solid var(--border);
+      background: var(--panel2);
+      color: var(--text);
+      padding: 8px 11px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
     }
-    .modal-actions .primary { background: var(--accent); color: #0d1117; border-color: var(--accent); font-weight: 700; }
-    .policy-error { color: var(--red); font-size: 12px; min-height: 16px; margin-top: 8px; }
+    button.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #07111d;
+    }
+    button:disabled { opacity: .55; cursor: not-allowed; }
+    .toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .toggle input { width: auto; }
+    .result-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .result {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #12161d;
+      min-width: 0;
+    }
+    .result h3 {
+      margin: 0;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+    }
+    pre {
+      margin: 0;
+      padding: 11px 12px;
+      overflow: auto;
+      background: var(--code);
+      color: #dce7f5;
+      border-radius: 0 0 8px 8px;
+      font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      line-height: 1.45;
+      max-height: 360px;
+    }
+    .finding-list { padding: 10px 12px; display: grid; gap: 8px; }
+    .finding {
+      border: 1px solid var(--border);
+      background: var(--panel2);
+      border-radius: 6px;
+      padding: 8px;
+      font-size: 13px;
+      line-height: 1.4;
+    }
+    .status-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 3px 9px;
+      border: 1px solid var(--border);
+      font-size: 12px;
+      color: var(--muted);
+      background: var(--panel2);
+    }
+    .badge.ok { color: var(--ok); border-color: #42c87855; }
+    .badge.bad { color: var(--bad); border-color: #ff696155; }
+    .badge.warn { color: var(--warn); border-color: #d7a74455; }
+    .empty {
+      color: var(--muted);
+      font-size: 13px;
+      padding: 12px;
+      line-height: 1.45;
+    }
+    .wide { grid-column: 1 / -1; }
+    .error { color: var(--bad); font-size: 13px; min-height: 18px; }
+    @media (max-width: 980px) {
+      main, .result-grid, .grid2 { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
-
-<header>
-  <div class="header-left">
-    <div class="logo">💰</div>
+  <header>
     <div>
-      <h1>Personal Finance Agent</h1>
-      <p>Budget · Goals · Investments · Debt</p>
+      <h1>Finance Safety Workbench</h1>
+      <div class="subtle">Local LLM semantic extraction -> Python policy mirror -> PlusCal/TLC</div>
     </div>
-  </div>
-  <div class="header-actions">
-    <button class="demo-btn" onclick="demoBadSuggestion()">Demo bad warning</button>
-    <button class="policy-btn" onclick="openSafetyPolicy()">Safety policy</button>
-    <button class="reset-btn" onclick="resetSession()">Reset session</button>
-  </div>
-</header>
-
-<div class="chips">
-  <span class="chip chip-budget">📊 Budget Tracker</span>
-  <span class="chip chip-goal">🎯 Goal Planner</span>
-  <span class="chip chip-invest">📈 Investment Guide</span>
-  <span class="chip chip-debt">💳 Debt Eliminator</span>
-</div>
-
-<div class="chat" id="chat">
-  <div class="welcome" id="welcome">
-    <div class="icon">💸</div>
-    <h2>Your AI Finance Companion</h2>
-    <p>I can help you track spending, plan savings goals, get investment recommendations, and build a debt payoff strategy.</p>
-    <div class="suggestions">
-      <div class="suggestion" onclick="useSuggestion(this)">
-        <strong>💳 Debt</strong>
-        I have a credit card with $4,500 balance at 22% APR — show me a payoff plan
-      </div>
-      <div class="suggestion" onclick="useSuggestion(this)">
-        <strong>🎯 Goal</strong>
-        I want to save $10,000 for an emergency fund by December 2026
-      </div>
-      <div class="suggestion" onclick="useSuggestion(this)">
-        <strong>📈 Invest</strong>
-        I'm 28, moderate risk, can invest $500/month for 20 years — what should I buy?
-      </div>
-      <div class="suggestion" onclick="useSuggestion(this)">
-        <strong>📊 Budget</strong>
-        I spent $120 on groceries and set a $300/month grocery limit
-      </div>
-      <div class="suggestion" onclick="demoBadSuggestion()">
-        <strong>⚠️ Safety Demo</strong>
-        Inject a bad financial suggestion and verify the TLA+ warning gate catches it
-      </div>
+    <div class="status-row">
+      <span class="badge">Model: qwen3:4b</span>
+      <span class="badge">Endpoint: localhost:11434</span>
     </div>
-  </div>
-</div>
+  </header>
 
-<div class="input-bar">
-  <textarea
-    id="input"
-    rows="1"
-    placeholder="Ask about budgets, goals, investments, or debt…"
-    onkeydown="handleKey(event)"
-    oninput="autoResize(this)"
-  ></textarea>
-  <button class="send-btn" id="sendBtn" onclick="send()" title="Send">↑</button>
-</div>
+  <main>
+    <section>
+      <div class="section-head">
+        <h2>Input</h2>
+        <button onclick="loadExample()">Load example</button>
+      </div>
+      <div class="body">
+        <label>
+          Ambiguous demo message
+          <select id="exampleSelect"></select>
+        </label>
+        <label>
+          Optional user context
+          <textarea id="userMessage" placeholder="Example: I want to clean up my cash before the end of the week."></textarea>
+        </label>
+        <label>
+          Finance advice to parse
+          <textarea class="advice" id="financeAdvice" placeholder="Paste ambiguous finance advice here."></textarea>
+        </label>
+        <div class="actions">
+          <button class="primary" id="runBtn" onclick="runSemanticCheck()">Run semantic safety check</button>
+          <label class="toggle"><input type="checkbox" id="runTlc" checked /> Run PlusCal/TLC</label>
+        </div>
+        <div class="error" id="inputError"></div>
+      </div>
+    </section>
 
-<div class="modal-backdrop" id="policyModal" onclick="backdropClose(event)">
-  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="policyTitle">
-    <h2 id="policyTitle">Safety policy</h2>
-    <div class="policy-grid">
-      <label>
-        Total action budget
-        <input id="policyBudget" inputmode="numeric" placeholder="700" />
-      </label>
-      <label>
-        Max individual action amount
-        <input id="policyMaxAction" inputmode="numeric" placeholder="400" />
-      </label>
-      <label>
-        Account balances JSON
-        <textarea id="policyBalances" spellcheck="false" placeholder='{"checking":1000,"brokerage":0,"savings":300}'></textarea>
-      </label>
-      <label>
-        Allowed destination accounts
-        <input id="policyDestinations" placeholder="brokerage, savings" />
-      </label>
-    </div>
-    <div class="policy-error" id="policyError"></div>
-    <div class="modal-actions">
-      <button onclick="closeSafetyPolicy()">Cancel</button>
-      <button class="primary" onclick="saveSafetyPolicy()">Save</button>
-    </div>
-  </div>
-</div>
+    <section>
+      <div class="section-head">
+        <h2>Security Invariants</h2>
+        <button onclick="resetPolicy()">Reset policy</button>
+      </div>
+      <div class="body">
+        <div class="grid2">
+          <label>
+            Total outflow budget
+            <input id="policyBudget" inputmode="numeric" />
+          </label>
+          <label>
+            Max individual action amount
+            <input id="policyMaxAction" inputmode="numeric" />
+          </label>
+        </div>
+        <label>
+          Account balances JSON
+          <textarea id="policyBalances" spellcheck="false"></textarea>
+        </label>
+        <label>
+          Allowed destination accounts
+          <input id="policyDestinations" />
+        </label>
+        <label>
+          Allowed action types
+          <input id="policyActionTypes" />
+        </label>
+      </div>
+    </section>
 
-<script>
-  const STORAGE_KEY = 'finance_agent_v1';
+    <section class="wide">
+      <div class="section-head">
+        <h2>Result</h2>
+        <div class="status-row" id="statusBadges">
+          <span class="badge">Not run</span>
+        </div>
+      </div>
+      <div class="body">
+        <div class="result-grid">
+          <div class="result">
+            <h3>Local Model Normalized Actions</h3>
+            <pre id="actionsJson">{}</pre>
+          </div>
+          <div class="result" id="rawModelResult" style="display: none;">
+            <h3>Raw Local Model Output</h3>
+            <pre id="rawModelOutput"></pre>
+          </div>
+          <div class="result">
+            <h3>Python Policy Layer</h3>
+            <div class="finding-list" id="pythonFindings">
+              <div class="empty">No run yet.</div>
+            </div>
+          </div>
+          <div class="result">
+            <h3>PlusCal / TLC</h3>
+            <pre id="tlcStatus">No run yet.</pre>
+          </div>
+          <div class="result">
+            <h3>Artifacts</h3>
+            <pre id="artifactStatus">No run yet.</pre>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
 
-  let state = loadState();
+  <script>
+    const STORAGE_KEY = 'semantic_safety_workbench_v1';
+    const examples = [
+      {
+        name: 'Soft recommendation, no actions',
+        user: 'I am 28 and have a moderate risk tolerance.',
+        advice: 'A reasonable educational portfolio to consider would be broad index exposure, such as VTI for US stocks, VXUS for international stocks, and BND for bonds. This is not an instruction to buy anything yet.',
+        policy: {
+          budget: 700,
+          max_individual_action_amount: 400,
+          account_balances: { checking: 1000, brokerage: 0, savings: 300 },
+          allowed_destination_accounts: ['brokerage', 'savings'],
+          allowed_action_types: ['buy', 'sell', 'swap', 'deposit', 'transfer', 'withdraw'],
+        },
+      },
+      {
+        name: 'Safe ordered transfer then buy',
+        user: 'I want to fund my brokerage and then make a small purchase.',
+        advice: 'First move 300 from checking into brokerage, then use that brokerage cash to buy 300 of VTI inside the brokerage account.',
+        policy: {
+          budget: 600,
+          max_individual_action_amount: 300,
+          account_balances: { checking: 300, brokerage: 0 },
+          allowed_destination_accounts: ['brokerage'],
+          allowed_action_types: ['buy', 'transfer'],
+        },
+      },
+      {
+        name: 'Unsafe order: buy before funding',
+        user: 'I want the fastest sequence.',
+        advice: 'Grab 300 worth of VTI in the brokerage account now, and after that move 300 from checking into brokerage so the cash is restored.',
+        policy: {
+          budget: 600,
+          max_individual_action_amount: 300,
+          account_balances: { checking: 300, brokerage: 0 },
+          allowed_destination_accounts: ['brokerage'],
+          allowed_action_types: ['buy', 'transfer'],
+        },
+      },
+      {
+        name: 'Budget plus unauthorized destination',
+        user: 'I want to split cash between investing, savings, and a reimbursement.',
+        advice: 'Send 350 from checking over to brokerage, set aside another 350 from checking for savings, and wire 50 from checking to Alex for the tickets.',
+        policy: {
+          budget: 700,
+          max_individual_action_amount: 400,
+          account_balances: { checking: 1000, brokerage: 0, savings: 300 },
+          allowed_destination_accounts: ['brokerage', 'savings'],
+          allowed_action_types: ['buy', 'sell', 'swap', 'deposit', 'transfer', 'withdraw'],
+        },
+      },
+      {
+        name: 'Individual action limit',
+        user: 'Keep my total spend modest.',
+        advice: 'Move 200 from checking into savings, then buy 401 of VTI from checking into brokerage.',
+        policy: {
+          budget: 700,
+          max_individual_action_amount: 400,
+          account_balances: { checking: 1000, brokerage: 0, savings: 300 },
+          allowed_destination_accounts: ['brokerage', 'savings'],
+          allowed_action_types: ['buy', 'transfer'],
+        },
+      },
+    ];
 
-  function loadState() {
-    try {
-      return JSON.parse(localStorage.getItem(STORAGE_KEY)) || { session_data: null, history: [] };
-    } catch { return { session_data: null, history: [] }; }
-  }
+    function initialize() {
+      const select = document.getElementById('exampleSelect');
+      examples.forEach((example, index) => {
+        const option = document.createElement('option');
+        option.value = String(index);
+        option.textContent = example.name;
+        select.appendChild(option);
+      });
+      const saved = loadState();
+      if (saved) {
+        document.getElementById('userMessage').value = saved.userMessage || '';
+        document.getElementById('financeAdvice').value = saved.financeAdvice || '';
+        fillPolicy(saved.policy || examples[0].policy);
+      } else {
+        loadExample();
+      }
+    }
 
-  function saveState() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  }
+    function loadState() {
+      try { return JSON.parse(localStorage.getItem(STORAGE_KEY)); } catch { return null; }
+    }
 
-  function resetSession() {
-    if (!confirm('Clear all your financial data and start fresh?')) return;
-    state = { session_data: null, history: [] };
-    saveState();
-    document.getElementById('chat').innerHTML = '';
-    document.getElementById('chat').appendChild(welcome());
-  }
+    function saveState() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+          userMessage: document.getElementById('userMessage').value,
+          financeAdvice: document.getElementById('financeAdvice').value,
+          policy: readPolicy(),
+        }));
+      } catch {}
+    }
 
-  function defaultPolicy() {
-    return {
-      budget: 700,
-      max_individual_action_amount: 400,
-      account_balances: { checking: 1000, brokerage: 0, savings: 300 },
-      allowed_destination_accounts: ['brokerage', 'savings'],
-    };
-  }
+    function loadExample() {
+      const example = examples[Number(document.getElementById('exampleSelect').value || 0)];
+      document.getElementById('userMessage').value = example.user;
+      document.getElementById('financeAdvice').value = example.advice;
+      fillPolicy(example.policy);
+      clearError();
+      saveState();
+    }
 
-  function currentPolicy() {
-    if (!state.session_data) state.session_data = {};
-    return state.session_data.safety_policy || defaultPolicy();
-  }
+    function resetPolicy() {
+      fillPolicy(examples[0].policy);
+      saveState();
+    }
 
-  function openSafetyPolicy() {
-    const policy = currentPolicy();
-    document.getElementById('policyBudget').value = policy.budget ?? '';
-    document.getElementById('policyMaxAction').value = policy.max_individual_action_amount ?? policy.budget ?? '';
-    document.getElementById('policyBalances').value = JSON.stringify(policy.account_balances || {}, null, 2);
-    document.getElementById('policyDestinations').value = (policy.allowed_destination_accounts || []).join(', ');
-    document.getElementById('policyError').textContent = '';
-    document.getElementById('policyModal').classList.add('open');
-  }
+    function fillPolicy(policy) {
+      document.getElementById('policyBudget').value = policy.budget;
+      document.getElementById('policyMaxAction').value = policy.max_individual_action_amount ?? policy.budget;
+      document.getElementById('policyBalances').value = JSON.stringify(policy.account_balances || {}, null, 2);
+      document.getElementById('policyDestinations').value = (policy.allowed_destination_accounts || []).join(', ');
+      document.getElementById('policyActionTypes').value = (policy.allowed_action_types || ['buy', 'sell', 'swap', 'deposit', 'transfer', 'withdraw']).join(', ');
+    }
 
-  function closeSafetyPolicy() {
-    document.getElementById('policyModal').classList.remove('open');
-  }
-
-  function backdropClose(event) {
-    if (event.target.id === 'policyModal') closeSafetyPolicy();
-  }
-
-  function saveSafetyPolicy() {
-    const error = document.getElementById('policyError');
-    try {
+    function readPolicy() {
       const budget = parseInt(document.getElementById('policyBudget').value, 10);
       const maxAction = parseInt(document.getElementById('policyMaxAction').value, 10);
-      const balances = JSON.parse(document.getElementById('policyBalances').value);
-      const destinations = document.getElementById('policyDestinations').value
-        .split(',')
-        .map((item) => item.trim())
-        .filter(Boolean);
-
+      const balances = JSON.parse(document.getElementById('policyBalances').value || '{}');
+      const destinations = splitCsv(document.getElementById('policyDestinations').value);
+      const actionTypes = splitCsv(document.getElementById('policyActionTypes').value);
       if (!Number.isInteger(budget) || budget < 0) throw new Error('Budget must be a non-negative integer.');
-      if (!Number.isInteger(maxAction) || maxAction < 0) throw new Error('Max action amount must be a non-negative integer.');
-      if (!balances || Array.isArray(balances) || typeof balances !== 'object') throw new Error('Account balances must be a JSON object.');
-      for (const [account, amount] of Object.entries(balances)) {
-        if (!account.trim()) throw new Error('Account names cannot be empty.');
-        if (!Number.isInteger(amount)) throw new Error(`Balance for ${account} must be an integer.`);
+      if (!Number.isInteger(maxAction) || maxAction < 0) throw new Error('Max individual amount must be a non-negative integer.');
+      if (!balances || Array.isArray(balances) || typeof balances !== 'object') throw new Error('Balances must be a JSON object.');
+      for (const [name, amount] of Object.entries(balances)) {
+        if (!name.trim()) throw new Error('Account names cannot be empty.');
+        if (!Number.isInteger(amount)) throw new Error(`Balance for ${name} must be an integer.`);
       }
-      if (!destinations.length) throw new Error('Add at least one allowed destination.');
-
-      if (!state.session_data) state.session_data = {};
-      state.session_data.safety_policy = {
+      if (!destinations.length) throw new Error('At least one allowed destination is required.');
+      if (!actionTypes.length) throw new Error('At least one allowed action type is required.');
+      return {
         budget,
         max_individual_action_amount: maxAction,
         account_balances: balances,
         allowed_destination_accounts: destinations,
+        allowed_action_types: actionTypes,
       };
-      saveState();
-      closeSafetyPolicy();
-    } catch (err) {
-      error.textContent = err.message;
-    }
-  }
-
-  function welcome() {
-    const div = document.createElement('div');
-    div.className = 'welcome';
-    div.id = 'welcome';
-    div.innerHTML = document.getElementById('welcome')?.innerHTML || '';
-    return div;
-  }
-
-  function useSuggestion(el) {
-    const text = el.innerText.split('\n').slice(1).join(' ').trim();
-    document.getElementById('input').value = text;
-    send();
-  }
-
-  function autoResize(el) {
-    el.style.height = 'auto';
-    el.style.height = Math.min(el.scrollHeight, 120) + 'px';
-  }
-
-  function handleKey(e) {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
-  }
-
-  function addMessage(content, role) {
-    const welcomeEl = document.getElementById('welcome');
-    if (welcomeEl) welcomeEl.remove();
-
-    const chat = document.getElementById('chat');
-    const msg = document.createElement('div');
-    msg.className = `msg ${role}`;
-
-    const avatar = document.createElement('div');
-    avatar.className = 'avatar';
-    avatar.textContent = role === 'user' ? '👤' : '🤖';
-
-    const bubble = document.createElement('div');
-    bubble.className = 'bubble';
-    const safeContent = typeof content === 'string' ? content : String(content ?? '');
-
-    if (role === 'agent') {
-      bubble.innerHTML = marked.parse(safeContent);
-    } else {
-      bubble.textContent = safeContent;
     }
 
-    msg.appendChild(avatar);
-    msg.appendChild(bubble);
-    chat.appendChild(msg);
-    chat.scrollTop = chat.scrollHeight;
-    return msg;
-  }
+    function splitCsv(value) {
+      return value.split(',').map((item) => item.trim()).filter(Boolean);
+    }
 
-  function addThinking() {
-    const chat = document.getElementById('chat');
-    const msg = document.createElement('div');
-    msg.className = 'msg agent';
-    msg.id = 'thinking';
+    async function runSemanticCheck() {
+      const runBtn = document.getElementById('runBtn');
+      clearError();
+      let policy;
+      try {
+        policy = readPolicy();
+      } catch (err) {
+        setError(err.message);
+        return;
+      }
+      const financeAdvice = document.getElementById('financeAdvice').value.trim();
+      if (!financeAdvice) {
+        setError('Finance advice must not be empty.');
+        return;
+      }
+      runBtn.disabled = true;
+      setBadges([{ text: 'Running local extraction', kind: 'warn' }]);
+      document.getElementById('actionsJson').textContent = 'Running qwen3:4b extraction...';
+      document.getElementById('pythonFindings').innerHTML = '<div class="empty">Waiting for normalized actions.</div>';
+      document.getElementById('tlcStatus').textContent = 'Waiting for policy and TLC result...';
+      document.getElementById('artifactStatus').textContent = 'Artifacts will appear after the run.';
 
-    const avatar = document.createElement('div');
-    avatar.className = 'avatar';
-    avatar.textContent = '🤖';
+      try {
+        const res = await fetch('/api/semantic-check', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_message: document.getElementById('userMessage').value,
+            finance_advice: financeAdvice,
+            policy,
+            run_model_checker: document.getElementById('runTlc').checked,
+          }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.detail || `Server error ${res.status}`);
+        }
+        const data = await res.json();
+        saveState();
+        renderResult(data);
+      } catch (err) {
+        setError(err.message);
+        setBadges([{ text: 'Run failed', kind: 'bad' }]);
+      } finally {
+        runBtn.disabled = false;
+      }
+    }
 
-    const bubble = document.createElement('div');
-    bubble.className = 'bubble thinking';
-    bubble.innerHTML = '<div class="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>';
+    function renderResult(data) {
+      renderExtraction(data);
+      const policyFindings = data.python_policy_findings || [];
+      const tlc = data.tlc || {};
+      const pluscal = data.pluscal || {};
+      const badges = [
+        { text: data.decision === 'extraction_failed' ? 'Extraction failed' : (data.safe_to_execute ? 'Safe' : 'Blocked'), kind: data.safe_to_execute ? 'ok' : 'bad' },
+        { text: `${(data.normalized_actions?.actions || []).length} action(s)`, kind: 'neutral' },
+        { text: `Python: ${policyFindings.length ? 'findings' : 'passed'}`, kind: policyFindings.length ? 'bad' : 'ok' },
+        { text: `TLC: ${tlc.status || 'unknown'}`, kind: tlc.status === 'passed' ? 'ok' : (tlc.status === 'skipped' ? 'warn' : 'bad') },
+      ];
+      setBadges(badges);
+      document.getElementById('actionsJson').textContent = JSON.stringify(data.normalized_actions || {}, null, 2);
+      if (data.extraction_error) {
+        renderFindings(data.all_findings || []);
+      } else {
+        renderFindings(policyFindings);
+      }
+      document.getElementById('tlcStatus').textContent = JSON.stringify({
+        pluscal_status: pluscal.status,
+        tlc_status: tlc.status,
+        pluscal_returncode: pluscal.returncode,
+        tlc_returncode: tlc.returncode,
+        all_findings: data.all_findings,
+      }, null, 2);
+      document.getElementById('artifactStatus').textContent = JSON.stringify({
+        artifacts: data.artifacts,
+        transformer_usage: data.transformer_usage,
+        observability: data.observability,
+      }, null, 2);
+    }
 
-    msg.appendChild(avatar);
-    msg.appendChild(bubble);
-    chat.appendChild(msg);
-    chat.scrollTop = chat.scrollHeight;
-  }
+    function renderExtraction(data) {
+      const rawResult = document.getElementById('rawModelResult');
+      const rawOutput = document.getElementById('rawModelOutput');
+      if (data.extraction_error) {
+        rawResult.style.display = '';
+        rawOutput.textContent = JSON.stringify(data.extraction_error, null, 2);
+      } else {
+        rawResult.style.display = 'none';
+        rawOutput.textContent = '';
+      }
+    }
 
-  function removeThinking() {
-    document.getElementById('thinking')?.remove();
-  }
-
-  async function send() {
-    const input = document.getElementById('input');
-    const btn = document.getElementById('sendBtn');
-    const message = input.value.trim();
-    if (!message) return;
-
-    input.value = '';
-    input.style.height = 'auto';
-    btn.disabled = true;
-
-    addMessage(message, 'user');
-    addThinking();
-
-    try {
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message,
-          session_data: state.session_data,
-          history: state.history,
-        }),
+    function renderFindings(findings) {
+      const target = document.getElementById('pythonFindings');
+      if (!findings.length) {
+        target.innerHTML = '<div class="empty">Python policy mirror found no violations.</div>';
+        return;
+      }
+      target.innerHTML = '';
+      findings.forEach((finding) => {
+        const div = document.createElement('div');
+        div.className = 'finding';
+        const action = finding.action_index ? ` action ${finding.action_index}` : '';
+        div.innerHTML = `<strong>${escapeHtml(finding.code)}${action}</strong><br>${escapeHtml(finding.message)}`;
+        target.appendChild(div);
       });
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || `Server error ${res.status}`);
-      }
-
-      const data = await res.json();
-      if (!data || typeof data.reply !== 'string') {
-        throw new Error(data?.error || 'Malformed server response: missing reply.');
-      }
-      removeThinking();
-      addMessage(data.reply, 'agent');
-      state.session_data = data.session_data;
-      state.history = data.history;
-      saveState();
-    } catch (err) {
-      removeThinking();
-      addMessage(`⚠️ ${err.message}`, 'agent');
-    } finally {
-      btn.disabled = false;
-      input.focus();
     }
-  }
 
-  async function demoBadSuggestion() {
-    const btn = document.getElementById('sendBtn');
-    btn.disabled = true;
-
-    addMessage('Run a bad financial suggestion safety demo', 'user');
-    addThinking();
-
-    try {
-      const res = await fetch('/api/demo/bad-suggestion', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          session_data: state.session_data,
-          history: state.history,
-        }),
+    function setBadges(items) {
+      const target = document.getElementById('statusBadges');
+      target.innerHTML = '';
+      items.forEach((item) => {
+        const span = document.createElement('span');
+        span.className = `badge ${item.kind || ''}`;
+        span.textContent = item.text;
+        target.appendChild(span);
       });
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || `Server error ${res.status}`);
-      }
-
-      const data = await res.json();
-      if (!data || typeof data.reply !== 'string') {
-        throw new Error(data?.error || 'Malformed server response: missing reply.');
-      }
-      removeThinking();
-      addMessage(data.reply, 'agent');
-      state.session_data = data.session_data;
-      state.history = data.history;
-      saveState();
-    } catch (err) {
-      removeThinking();
-      addMessage(`⚠️ ${err.message}`, 'agent');
-    } finally {
-      btn.disabled = false;
-      document.getElementById('input').focus();
     }
-  }
-</script>
+
+    function setError(message) {
+      document.getElementById('inputError').textContent = message;
+    }
+
+    function clearError() {
+      setError('');
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;',
+      }[char]));
+    }
+
+    initialize();
+  </script>
 </body>
 </html>

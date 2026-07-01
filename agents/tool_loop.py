@@ -7,9 +7,7 @@ import json
 import logging
 from typing import Any, Callable, Dict, List
 
-from openai import OpenAI
-
-from config import normalize_openai_api_key, openai_model
+from config import normalize_openai_api_key, openai_chat_options, openai_client, openai_model
 import observability
 
 MODEL = openai_model()
@@ -70,7 +68,7 @@ def run(
     handle_tool: Callable[[str, Dict[str, Any]], str],
 ) -> str:
     normalize_openai_api_key()
-    client = OpenAI()
+    client = openai_client()
     tool_names = {t["function"]["name"] for t in tools}
     tools_description = _tools_to_description(tools)
     enhanced_system = system_prompt + LOOP_SUFFIX.format(tools_description=tools_description)
@@ -88,11 +86,12 @@ def run(
             step=step,
         ):
             response = client.chat.completions.create(
-                model=MODEL,
-                messages=messages,
-                response_format={"type": "json_object"},
-                max_tokens=2048,
-                temperature=0.1,
+                **openai_chat_options(
+                    model=MODEL,
+                    messages=messages,
+                    max_tokens=2048,
+                    temperature=0.1,
+                )
             )
         raw = response.choices[0].message.content or "{}"
 

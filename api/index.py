@@ -6,6 +6,7 @@ import random
 import sys
 import time
 from dataclasses import replace
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -22,23 +23,22 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from openai import OpenAI
 from pydantic import BaseModel
 
 load_dotenv()
 
 from agents import budget_agent, debt_agent, goal_agent, investment_agent, storage
-from config import has_openai_api_key, normalize_openai_api_key, openai_model
+from config import has_openai_api_key, normalize_openai_api_key, openai_chat_options, openai_client, openai_model
 import observability
 from safety.agent import TlaSafetyAgentResult
-from safety.models import SafetyInputError, SafetyPolicy
+from safety.models import FinanceAction, SafetyInputError, SafetyPolicy, dump_actions
 from safety.transformer import (
     ExplicitRequestActionTransformer,
     FinanceActionsBlockTransformer,
     OpenAIActionTransformer,
 )
 from safety.agent import TlaSafetyAgent
-from safety.validator import SafetyFinding
+from safety.validator import SafetyFinding, evaluate_policy
 
 normalize_openai_api_key()
 observability.configure_logging()
@@ -134,6 +134,13 @@ class SafetyDemoRequest(BaseModel):
     example: Optional[str] = None
 
 
+class SemanticCheckRequest(BaseModel):
+    user_message: str = ""
+    finance_advice: str
+    policy: Dict[str, Any]
+    run_model_checker: Optional[bool] = None
+
+
 @app.post("/api/chat")
 def chat(req: ChatRequest):
     request_id = observability.new_id("req")
@@ -178,6 +185,37 @@ def chat(req: ChatRequest):
         return response
 
 
+@app.post("/api/semantic-check")
+def semantic_check(req: SemanticCheckRequest):
+    request_id = observability.new_id("req")
+    start = time.perf_counter()
+    with observability.scoped_context(request_id=request_id):
+        try:
+            return _semantic_check(req)
+        except HTTPException:
+            raise
+        except SafetyInputError as exc:
+            observability.log_event(
+                logger,
+                "api.semantic_check.end",
+                level=logging.WARNING,
+                status="input_error",
+                error_type=type(exc).__name__,
+                duration_ms=observability.elapsed_ms(start),
+            )
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:
+            observability.log_event(
+                logger,
+                "api.semantic_check.end",
+                level=logging.ERROR,
+                status="error",
+                error_type=type(exc).__name__,
+                duration_ms=observability.elapsed_ms(start),
+            )
+            raise HTTPException(status_code=500, detail=f"Semantic check failed: {exc}") from exc
+
+
 @app.post("/api/demo/bad-suggestion")
 def demo_bad_suggestion(req: SafetyDemoRequest) -> ChatResponse:
     storage.init_session(req.session_data)
@@ -201,6 +239,128 @@ def demo_bad_suggestion(req: SafetyDemoRequest) -> ChatResponse:
     return ChatResponse(reply=reply, session_data=storage.get_session() or {}, history=history[-30:])
 
 
+def _semantic_check(req: SemanticCheckRequest) -> Dict[str, Any]:
+    start = time.perf_counter()
+    advice = req.finance_advice.strip()
+    if not advice:
+        raise SafetyInputError("finance_advice must not be empty")
+    policy = SafetyPolicy.from_json(req.policy)
+    safety_input = (
+        "User request:\n"
+        f"{req.user_message.strip() or '(none)'}\n\n"
+        "Finance agent response:\n"
+        f"{advice}"
+    )
+
+    transformer = OpenAIActionTransformer()
+    try:
+        actions = transformer.transform(safety_input)
+    except SafetyInputError as exc:
+        observability.log_event(
+            logger,
+            "api.semantic_check.extraction_failed",
+            level=logging.WARNING,
+            error_type=type(exc).__name__,
+            error=str(exc),
+        )
+        observability.log_event(
+            logger,
+            "api.semantic_check.end",
+            level=logging.WARNING,
+            status="extraction_failed",
+            duration_ms=observability.elapsed_ms(start),
+        )
+        return _semantic_extraction_error_response(exc, transformer)
+
+    policy_findings = evaluate_policy(actions, policy)
+    run_model_checker = _should_run_tlc() if req.run_model_checker is None else bool(req.run_model_checker)
+    run_name = _semantic_run_name()
+    run_id = observability.new_id("semantic")
+
+    checker = TlaSafetyAgent(
+        transformer=_PrecomputedActionTransformer(actions, getattr(transformer, "last_usage_estimate", {})),
+        artifact_root=_safety_artifact_root(),
+    )
+    result = checker.check(
+        safety_input,
+        policy,
+        run_name=run_name,
+        run_model_checker=run_model_checker,
+        run_id=run_id,
+    )
+    report = result.to_json()
+    response = {
+        "safe_to_execute": result.safe_to_execute,
+        "decision": result.decision,
+        "normalized_actions": dump_actions(actions),
+        "python_policy_findings": [finding.to_json() for finding in policy_findings],
+        "all_findings": report["findings"],
+        "pluscal": report["pluscal"],
+        "tlc": report["tlc"],
+        "artifacts": report["artifacts"],
+        "transformer_usage": report["transformer_usage"],
+        "observability": report["observability"],
+        "report": report,
+    }
+    observability.log_event(
+        logger,
+        "api.semantic_check.end",
+        status="ok",
+        action_count=len(actions),
+        policy_finding_count=len(policy_findings),
+        model_checker_enabled=run_model_checker,
+        safe_to_execute=result.safe_to_execute,
+        duration_ms=observability.elapsed_ms(start),
+    )
+    return response
+
+
+def _semantic_extraction_error_response(
+    exc: SafetyInputError,
+    transformer: OpenAIActionTransformer,
+) -> Dict[str, Any]:
+    return {
+        "safe_to_execute": False,
+        "decision": "extraction_failed",
+        "extraction_error": {
+            "message": str(exc),
+            "raw_model_output": getattr(transformer, "last_raw_content", ""),
+        },
+        "normalized_actions": {"actions": []},
+        "python_policy_findings": [],
+        "all_findings": [
+            {
+                "code": "semantic_action_extraction_failed",
+                "severity": "error",
+                "message": (
+                    "The local model did not produce valid normalized action JSON, "
+                    "so policy and TLC checks were not run."
+                ),
+            }
+        ],
+        "pluscal": {"status": "skipped"},
+        "tlc": {"status": "skipped"},
+        "artifacts": {},
+        "transformer_usage": getattr(transformer, "last_usage_estimate", {}),
+        "observability": {"status": "extraction_failed"},
+        "report": None,
+    }
+
+
+class _PrecomputedActionTransformer:
+    def __init__(self, actions: list[FinanceAction], usage: Dict[str, Any]) -> None:
+        self.actions = actions
+        self.last_usage_estimate = usage
+
+    def transform(self, finance_agent_output: str) -> list[FinanceAction]:
+        return self.actions
+
+
+def _semantic_run_name() -> str:
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+    return f"semantic_{stamp}"
+
+
 def _chat(req: ChatRequest) -> ChatResponse:
     storage.init_session(req.session_data)
     history = list(req.history)
@@ -214,20 +374,21 @@ def _chat(req: ChatRequest) -> ChatResponse:
         )
         return pending_reply
 
-    client = OpenAI()
+    client = openai_client()
 
     # Step 1: Route to agent(s)
     model = openai_model()
     with observability.operation(logger, "api.router.openai", model=model) as router_event:
         router_resp = client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": ROUTER_SYSTEM},
-                {"role": "user", "content": req.message},
-            ],
-            response_format={"type": "json_object"},
-            max_tokens=200,
-            temperature=0,
+            **openai_chat_options(
+                model=model,
+                messages=[
+                    {"role": "system", "content": ROUTER_SYSTEM},
+                    {"role": "user", "content": req.message},
+                ],
+                max_tokens=200,
+                temperature=0,
+            )
         )
         try:
             routing = json.loads(router_resp.choices[0].message.content)
@@ -414,7 +575,7 @@ def _check_reply_with_tla_safety(user_message: str, finance_reply: str) -> Optio
 
 
 def _recover_from_missing_actions_block(message: str, user_message: str, policy: SafetyPolicy) -> TlaSafetyAgentResult:
-    if "finance-actions JSON block" not in message:
+    if "finance-actions" not in message or "block" not in message:
         return _failed_safety_result(message, code="finance_output_protocol_violation")
 
     checker = TlaSafetyAgent(

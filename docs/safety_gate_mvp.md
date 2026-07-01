@@ -51,9 +51,11 @@ For soft recommendations with no executable action:
 
 The API safety gate no longer depends on this block in normal local runs. It
 uses an LLM transformer to read the user request plus finance-agent response
-and emit the canonical action schema. That avoids false warnings when the
-finance-agent wording is semantically clear but the message format is imperfect.
-Set `SAFETY_ACTION_TRANSFORMER=block` to force deterministic block parsing for
+and emit the canonical action schema. That transformer can use either the paid
+OpenAI API or an OpenAI-compatible local model server configured with
+`OPENAI_BASE_URL`. That avoids false warnings when the finance-agent wording is
+semantically clear but the message format is imperfect. Set
+`SAFETY_ACTION_TRANSFORMER=block` to force deterministic block parsing for
 fixture tests.
 
 ```python
@@ -139,6 +141,12 @@ each request.
 By default, local safety artifacts are written to `artifacts/safety-runs`. Set
 `SAFETY_ARTIFACT_ROOT` to override this. Set `SAFETY_RUN_TLC=0` to skip
 PlusCal/TLC execution during local UI smoke tests.
+
+For a no-paid-API semantic extraction demo, see
+`docs/local_llm_semantic_extraction.md`. The current successful local path is
+Ollama `qwen3:4b` with the web workbench at `http://localhost:8000`; the
+semantic extractor reads ambiguous prose, emits canonical action JSON, and then
+feeds the same Python policy mirror and TLC pipeline described here.
 
 The generated TLA follows the same workflow style as the local reference model
 at `../Platypus-Model/tla-model/2-stage-platypus-v7`: keep the transition

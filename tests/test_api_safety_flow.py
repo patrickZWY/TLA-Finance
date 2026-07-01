@@ -32,7 +32,7 @@ def load_text_fixture(name: str) -> str:
     return (ROOT / "fixtures" / name).read_text(encoding="utf-8")
 
 
-def fake_openai_with_router_content(content: str):
+def fake_openai_client_with_router_content(content: str):
     class FakeCompletions:
         def create(self, **kwargs):
             return SimpleNamespace(
@@ -45,7 +45,7 @@ def fake_openai_with_router_content(content: str):
         def __init__(self):
             self.chat = SimpleNamespace(completions=FakeCompletions())
 
-    return FakeOpenAI
+    return FakeOpenAI()
 
 
 @unittest.skipIf(API_IMPORT_ERROR is not None, f"API dependencies unavailable: {API_IMPORT_ERROR}")
@@ -122,7 +122,7 @@ class ApiSafetyFlowTests(unittest.TestCase):
 
     def test_chat_request_logs_selected_agents_and_safety_status(self):
         with patch.dict(os.environ, {"OBSERVABILITY_ENABLED": "1", "LOG_FORMAT": "json"}, clear=False):
-            with patch.object(api_index, "OpenAI", fake_openai_with_router_content('{"agents":["budget"],"task":"summarize"}')):
+            with patch.object(api_index, "openai_client", return_value=fake_openai_client_with_router_content('{"agents":["budget"],"task":"summarize"}')):
                 with patch.dict(api_index.AGENT_MAP, {"budget": (lambda task: "Budget reply.", "Budget")}):
                     with patch.object(api_index, "_check_reply_with_tla_safety", return_value=None):
                         with self.assertLogs(api_index.__name__, level="INFO") as captured:
@@ -138,7 +138,7 @@ class ApiSafetyFlowTests(unittest.TestCase):
 
     def test_malformed_router_json_logs_parse_failure_and_falls_back(self):
         with patch.dict(os.environ, {"OBSERVABILITY_ENABLED": "1", "LOG_FORMAT": "json"}, clear=False):
-            with patch.object(api_index, "OpenAI", fake_openai_with_router_content("{not-json")):
+            with patch.object(api_index, "openai_client", return_value=fake_openai_client_with_router_content("{not-json")):
                 with patch.dict(api_index.AGENT_MAP, {"budget": (lambda task: "Budget reply.", "Budget")}):
                     with patch.object(api_index, "_check_reply_with_tla_safety", return_value=None):
                         with self.assertLogs(api_index.__name__, level="INFO") as captured:

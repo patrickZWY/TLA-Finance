@@ -139,10 +139,10 @@ AutomataSeal/
 # 1. Install
 pip install -r requirements.txt
 
-# 2. Set API key
+# 2. Configure an LLM
 cp .env.example .env
-# edit .env -> OPENAI_API_KEY=your_key
-# optional: OPENAI_MODEL=gpt-4o-mini
+# paid path: set OPENAI_API_KEY and optionally OPENAI_MODEL
+# local demo path: set OPENAI_BASE_URL and OPENAI_MODEL for an OpenAI-compatible local server
 
 # 3. Local web app
 python3 -m uvicorn api.index:app --port 8000
@@ -151,6 +151,42 @@ python3 -m uvicorn api.index:app --port 8000
 # 3b. Terminal CLI
 python3 main.py
 ```
+
+### Local LLM demo mode
+
+For a no-paid-API demo, use Ollama with `qwen3:4b`:
+
+```sh
+ollama pull qwen3:4b
+ollama serve
+```
+
+Then start the app with:
+
+```sh
+export OPENAI_BASE_URL=http://localhost:11434/v1
+export OPENAI_MODEL=qwen3:4b
+export OPENAI_REASONING_EFFORT=none
+export SAFETY_RUN_TLC=1
+python3 -m uvicorn api.index:app --port 8000
+```
+
+Open `http://localhost:8000`. The workbench lets you choose an ambiguous
+finance message, edit the policy invariants, run local semantic extraction, and
+then see Python policy findings plus TLC output.
+
+The app supplies a dummy local API key when `OPENAI_BASE_URL` is set. For
+Ollama on `localhost:11434`, the extractor uses Ollama's native structured
+output API and disables Qwen thinking output for this parse call. That is
+important: without `think: false`, `qwen3:4b` may spend the response budget in
+reasoning text instead of returning JSON.
+
+The semantic action extractor uses the same local endpoint. That means the demo
+still exercises the key claim: a local LLM reads ambiguous finance language into
+canonical action JSON before the TLA/TLC safety gate checks it.
+
+See `docs/local_llm_semantic_extraction.md` for the successful demo scenarios
+and troubleshooting notes.
 
 ---
 

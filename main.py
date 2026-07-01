@@ -6,7 +6,6 @@ import os
 import sys
 from typing import Any, Dict
 
-from openai import OpenAI
 from dotenv import load_dotenv
 from rich.console import Console
 from rich.markdown import Markdown
@@ -15,7 +14,7 @@ from rich.prompt import Prompt
 from rich.rule import Rule
 from rich.text import Text
 
-from config import has_openai_api_key, normalize_openai_api_key, openai_model
+from config import has_openai_api_key, normalize_openai_api_key, openai_chat_options, openai_client, openai_model
 import observability
 
 load_dotenv()
@@ -145,19 +144,20 @@ def _get_agent_map():
 
 
 def run_orchestrator(user_message: str, conversation_history: list) -> str:
-    client = OpenAI()
+    client = openai_client()
     conversation_history.append({"role": "user", "content": user_message})
 
     # Step 1: Route — use JSON mode (no tool calls, no format issues)
     router_response = client.chat.completions.create(
-        model=openai_model(),
-        messages=[
-            {"role": "system", "content": ROUTER_SYSTEM},
-            {"role": "user", "content": user_message},
-        ],
-        response_format={"type": "json_object"},
-        max_tokens=300,
-        temperature=0,
+        **openai_chat_options(
+            model=openai_model(),
+            messages=[
+                {"role": "system", "content": ROUTER_SYSTEM},
+                {"role": "user", "content": user_message},
+            ],
+            max_tokens=300,
+            temperature=0,
+        )
     )
     routing = json.loads(router_response.choices[0].message.content)
     agents_to_call = routing.get("agents", ["budget"])
