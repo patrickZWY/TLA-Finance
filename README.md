@@ -175,18 +175,10 @@ Open `http://localhost:8000`. The workbench lets you choose an ambiguous
 finance message, edit the policy invariants, run local semantic extraction, and
 then see Python policy findings plus TLC output.
 
-The app supplies a dummy local API key when `OPENAI_BASE_URL` is set. For
-Ollama on `localhost:11434`, the extractor uses Ollama's native structured
-output API and disables Qwen thinking output for this parse call. That is
-important: without `think: false`, `qwen3:4b` may spend the response budget in
-reasoning text instead of returning JSON.
-
-The semantic action extractor uses the same local endpoint. That means the demo
-still exercises the key claim: a local LLM reads ambiguous finance language into
-canonical action JSON before the TLA/TLC safety gate checks it.
-
-See `docs/local_llm_semantic_extraction.md` for the successful demo scenarios
-and troubleshooting notes.
+The app supplies a dummy local API key when `OPENAI_BASE_URL` is set. See
+`docs/local_llm_safety_workbench_design.md` for the workbench architecture and
+`docs/local_llm_semantic_extraction.md` for successful demo scenarios and
+troubleshooting notes.
 
 ---
 
