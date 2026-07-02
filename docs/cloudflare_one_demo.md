@@ -13,10 +13,56 @@ Install dependencies and make sure these processes/tools are available:
   containing `tla2tools.jar`.
 - Your Mac stays awake and online during the demo.
 
+## Next-Time Runbook
+
+From the repo root, start or refresh the Python environment if needed:
+
+```sh
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+In one terminal, make sure the local model server is available:
+
+```sh
+ollama pull qwen3:4b
+ollama serve
+```
+
+In a second terminal, start FastAPI on localhost:
+
+```sh
+cd /Users/zhengwangyuan/repos/TLA-Finance
+source .venv/bin/activate
+export PUBLIC_DEMO_HOSTNAME=demo.zhengwangyuan-patrick.com
+export CLOUDFLARE_HOSTNAME=live-demo.zhengwangyuan-patrick.com
+export TLAPLUS_JAR=/path/to/tla2tools.jar
+bash scripts/run_cloudflare_demo.sh
+```
+
+In a third terminal, connect Cloudflare to the local FastAPI server:
+
+```sh
+cloudflared tunnel run --url http://localhost:8000 tla-finance-demo
+```
+
+Then open:
+
+```text
+Local:      http://127.0.0.1:8000
+Cloudflare: https://demo.zhengwangyuan-patrick.com
+```
+
+The public demo hostname should route to the Worker in the personal-site repo.
+The Worker proxies to the live tunnel hostname when the local app is running and
+returns a clear offline message when it is not.
+
 Start FastAPI bound only to loopback:
 
 ```sh
-export CLOUDFLARE_HOSTNAME=automata-demo.example.com
+export PUBLIC_DEMO_HOSTNAME=demo.zhengwangyuan-patrick.com
+export CLOUDFLARE_HOSTNAME=live-demo.zhengwangyuan-patrick.com
 export TLAPLUS_JAR=/path/to/tla2tools.jar
 bash scripts/run_cloudflare_demo.sh
 ```
@@ -36,19 +82,20 @@ SAFETY_TLA_TIMEOUT_SECONDS=60
 If you do not use `CLOUDFLARE_HOSTNAME`, set these explicitly:
 
 ```sh
-export ALLOWED_ORIGINS=https://automata-demo.example.com
-export ALLOWED_HOSTS=automata-demo.example.com,127.0.0.1,localhost
+export ALLOWED_ORIGINS=https://demo.zhengwangyuan-patrick.com,https://live-demo.zhengwangyuan-patrick.com
+export ALLOWED_HOSTS=demo.zhengwangyuan-patrick.com,live-demo.zhengwangyuan-patrick.com,127.0.0.1,localhost
 ```
 
 ## Cloudflare Tunnel
 
 Use a named tunnel, not a random quick tunnel.
 
-Create or configure a tunnel that maps:
+The current named tunnel is `tla-finance-demo`. It should be routed to the
+live-only hostname, not the public fallback hostname:
 
 ```yaml
 ingress:
-  - hostname: automata-demo.example.com
+  - hostname: live-demo.zhengwangyuan-patrick.com
     service: http://localhost:8000
   - service: http_status:404
 ```
@@ -56,7 +103,15 @@ ingress:
 Run it locally:
 
 ```sh
-cloudflared tunnel run <tunnel-name>
+cloudflared tunnel run --url http://localhost:8000 tla-finance-demo
+```
+
+In Cloudflare Zero Trust, remove any tunnel public hostname entry for
+`demo.zhengwangyuan-patrick.com`. The `demo` hostname belongs to the Worker in
+the personal-site repo. The tunnel hostname is:
+
+```text
+live-demo.zhengwangyuan-patrick.com
 ```
 
 You can also install `cloudflared` as a macOS service if the demo needs to stay
@@ -64,9 +119,9 @@ up across terminal sessions.
 
 ## Cloudflare Access
 
-Create a self-hosted Access application for the same public hostname:
+Create a self-hosted Access application for the live tunnel hostname:
 
-- Application domain: `automata-demo.example.com`
+- Application domain: `live-demo.zhengwangyuan-patrick.com`
 - Policy action: Allow
 - Include: only the invited tester email addresses
 - Session duration: 24 hours
@@ -90,7 +145,7 @@ the Mac:
 
 ## Acceptance Checks
 
-- Unauthenticated request to the public hostname redirects to Cloudflare Access.
+- Unauthenticated request to the live tunnel hostname redirects to Cloudflare Access.
 - Invited email can authenticate and load the UI.
 - Non-invited email is denied.
 - Authenticated `/api/health` returns `{"status":"ok"}` through the tunnel.
