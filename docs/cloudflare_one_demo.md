@@ -58,6 +58,15 @@ The public demo hostname should route to the Worker in the personal-site repo.
 The Worker proxies to the live tunnel hostname when the local app is running and
 returns a clear offline message when it is not.
 
+If the public page shows `Invalid host header`, FastAPI received a `Host`
+header that is not in the app allowlist. Add the public site hostname and the
+live tunnel hostname before starting the app:
+
+```sh
+export PUBLIC_DEMO_HOSTNAME=demo.zhengwangyuan-patrick.com
+export CLOUDFLARE_HOSTNAME=live-demo.zhengwangyuan-patrick.com
+```
+
 Start FastAPI bound only to loopback:
 
 ```sh

@@ -84,6 +84,60 @@ Open `http://127.0.0.1:8000`. If Java/TLA+ tools are not configured yet,
 uncheck **Run PlusCal/TLC** in the UI for extractor and Python-policy smoke
 tests, or set up TLA+ with [docs/tla_setup_macos.md](docs/tla_setup_macos.md).
 
+## Run Locally, Then Share Online
+
+Use this path when the demo runs on your Mac but invited users need to open it
+from the public website. This assumes the Cloudflare tunnel `tla-finance-demo`
+is already created and routed to `live-demo.zhengwangyuan-patrick.com`; see
+[docs/cloudflare_one_demo.md](docs/cloudflare_one_demo.md) for first-time
+Cloudflare setup.
+
+1. Start the local model server:
+
+```sh
+ollama pull qwen3:4b
+ollama serve
+```
+
+2. In a second terminal, start FastAPI on loopback with the public hostnames
+   trusted by the app:
+
+```sh
+# From the repo root:
+source .venv/bin/activate
+export PUBLIC_DEMO_HOSTNAME=demo.zhengwangyuan-patrick.com
+export CLOUDFLARE_HOSTNAME=live-demo.zhengwangyuan-patrick.com
+export TLAPLUS_JAR=/path/to/tla2tools.jar
+bash scripts/run_cloudflare_demo.sh
+```
+
+3. In a third terminal, connect Cloudflare to the local FastAPI server:
+
+```sh
+cloudflared tunnel run --url http://localhost:8000 tla-finance-demo
+```
+
+Then verify both URLs:
+
+```text
+Local:      http://127.0.0.1:8000
+Cloudflare: https://demo.zhengwangyuan-patrick.com
+```
+
+Keep the FastAPI and `cloudflared` terminals running while others use the
+online demo. If you use different hostnames, update both the environment values
+above and the matching Cloudflare tunnel/Worker configuration.
+
+If `run_cloudflare_demo.sh` reports port `8000` is already in use, stop the old
+listener before restarting:
+
+```sh
+lsof -nP -iTCP:8000 -sTCP:LISTEN
+kill <PID>
+```
+
+Only use `kill -9 <PID>` if a normal `kill` does not release the port.
+
 ## TLA+ Tools
 
 Full model-checking requires Java plus `tla2tools.jar`. The checker finds the
@@ -234,7 +288,7 @@ tool execution provider-agnostic for OpenAI-compatible chat APIs.
 | `SAFETY_PLUSCAL_TIMEOUT_SECONDS` / `SAFETY_TLC_TIMEOUT_SECONDS` | unset | Per-tool timeout overrides. |
 | `ALLOWED_ORIGINS` | local origins | Comma-separated CORS origin allowlist. |
 | `ALLOWED_HOSTS` | local hosts | Comma-separated trusted host allowlist. |
-| `PUBLIC_HOSTNAME` / `CLOUDFLARE_HOSTNAME` / `CF_HOSTNAME` | unset | Adds a public HTTPS origin and host. |
+| `PUBLIC_HOSTNAME` / `PUBLIC_DEMO_HOSTNAME` / `CLOUDFLARE_HOSTNAME` / `CF_HOSTNAME` | unset | Adds public HTTPS origins and hosts. |
 | `OBSERVABILITY_ENABLED` | `1` | Disable structured event emission with `0`, `false`, `no`, or `off`. |
 | `OBSERVE_PAYLOADS` | `0` | Set to `1` to log sensitive prompts, replies, and tool arguments. |
 | `LOG_FORMAT` | `plain` | Use `json` for machine-parseable logs. |
@@ -242,6 +296,17 @@ tool execution provider-agnostic for OpenAI-compatible chat APIs.
 
 Request-size limits are also configurable with `API_MAX_*` variables. See
 `DEFAULT_REQUEST_LIMITS` in [api/index.py](api/index.py).
+
+If the browser shows `Invalid host header`, the app is being reached through a
+hostname that is not trusted by FastAPI. Restart the app with that hostname in
+`ALLOWED_HOSTS`, or set `PUBLIC_DEMO_HOSTNAME`/`PUBLIC_HOSTNAME` for the public
+site hostname:
+
+```sh
+export PUBLIC_DEMO_HOSTNAME=demo.example.com
+export CLOUDFLARE_HOSTNAME=live-demo.example.com
+python3 -m uvicorn api.index:app --host 127.0.0.1 --port 8000
+```
 
 ## Project Layout
 

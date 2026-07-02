@@ -56,6 +56,20 @@ class ConfigTests(unittest.TestCase):
             self.assertIn("automata-demo.example.com", trusted_hosts())
             self.assertIn("localhost", trusted_hosts())
 
+    def test_public_demo_and_cloudflare_hostnames_are_allowed_together(self):
+        with patch.dict(
+            os.environ,
+            {
+                "PUBLIC_DEMO_HOSTNAME": "demo.example.com",
+                "CLOUDFLARE_HOSTNAME": "live-demo.example.com",
+            },
+            clear=True,
+        ):
+            self.assertIn("https://demo.example.com", allowed_origins())
+            self.assertIn("https://live-demo.example.com", allowed_origins())
+            self.assertIn("demo.example.com", trusted_hosts())
+            self.assertIn("live-demo.example.com", trusted_hosts())
+
     def test_explicit_origin_and_host_config_is_respected(self):
         with patch.dict(
             os.environ,

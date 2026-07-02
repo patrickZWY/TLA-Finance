@@ -11,6 +11,7 @@ DEFAULT_OPENAI_MODEL = "gpt-4o-mini"
 DEFAULT_LOCAL_API_KEY = "local-demo-key"
 DEFAULT_ALLOWED_ORIGINS = ("http://127.0.0.1:8000", "http://localhost:8000")
 DEFAULT_ALLOWED_HOSTS = ("127.0.0.1", "localhost", "testserver")
+PUBLIC_HOSTNAME_ENV_KEYS = ("PUBLIC_HOSTNAME", "PUBLIC_DEMO_HOSTNAME", "CLOUDFLARE_HOSTNAME", "CF_HOSTNAME")
 
 
 def normalize_openai_api_key() -> None:
@@ -65,9 +66,9 @@ def allowed_origins() -> list[str]:
     configured = _csv_env("ALLOWED_ORIGINS")
     if configured:
         return configured
-    hostname = public_hostname()
-    if hostname:
-        return [f"https://{hostname}", *DEFAULT_ALLOWED_ORIGINS]
+    hostnames = public_hostnames()
+    if hostnames:
+        return [f"https://{hostname}" for hostname in hostnames] + list(DEFAULT_ALLOWED_ORIGINS)
     return list(DEFAULT_ALLOWED_ORIGINS)
 
 
@@ -81,18 +82,27 @@ def trusted_hosts() -> list[str]:
         host = _host_value(origin)
         if host:
             hosts.add(host)
-    hostname = public_hostname()
-    if hostname:
+    for hostname in public_hostnames():
         hosts.add(hostname)
     return sorted(hosts)
 
 
 def public_hostname() -> str | None:
-    for key in ("PUBLIC_HOSTNAME", "CLOUDFLARE_HOSTNAME", "CF_HOSTNAME"):
+    hostnames = public_hostnames()
+    return hostnames[0] if hostnames else None
+
+
+def public_hostnames() -> list[str]:
+    hostnames: list[str] = []
+    seen: set[str] = set()
+    for key in PUBLIC_HOSTNAME_ENV_KEYS:
         value = os.getenv(key)
         if value and value.strip():
-            return _host_value(value.strip())
-    return None
+            host = _host_value(value.strip())
+            if host and host not in seen:
+                hostnames.append(host)
+                seen.add(host)
+    return hostnames
 
 
 def safety_subprocess_timeout_seconds(kind: str | None = None) -> int:
