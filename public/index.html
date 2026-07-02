@@ -160,6 +160,15 @@
     }
     .wide { grid-column: 1 / -1; }
     .error { color: var(--bad); font-size: 13px; min-height: 18px; }
+    .disclaimer {
+      border: 1px solid #d7a74455;
+      background: #1e1a12;
+      color: #e9d39a;
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-size: 12px;
+      line-height: 1.4;
+    }
     @media (max-width: 980px) {
       main, .result-grid, .grid2 { grid-template-columns: 1fr; }
     }
@@ -200,6 +209,7 @@
           <button class="primary" id="runBtn" onclick="runSemanticCheck()">Run semantic safety check</button>
           <label class="toggle"><input type="checkbox" id="runTlc" checked /> Run PlusCal/TLC</label>
         </div>
+        <div class="disclaimer">Sandbox demo only. It does not execute trades or transfers and is not financial advice.</div>
         <div class="error" id="inputError"></div>
       </div>
     </section>

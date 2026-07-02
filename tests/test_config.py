@@ -5,12 +5,15 @@ from unittest.mock import patch
 from config import (
     DEFAULT_LOCAL_API_KEY,
     DEFAULT_OPENAI_MODEL,
+    allowed_origins,
     has_openai_api_key,
     openai_api_key,
     openai_base_url,
     openai_chat_options,
     openai_json_mode_enabled,
     openai_model,
+    safety_subprocess_timeout_seconds,
+    trusted_hosts,
 )
 
 
@@ -42,6 +45,40 @@ class ConfigTests(unittest.TestCase):
     def test_reasoning_effort_is_added_when_configured(self):
         with patch.dict(os.environ, {"OPENAI_REASONING_EFFORT": "none"}, clear=True):
             self.assertEqual(openai_chat_options(model="m")["reasoning_effort"], "none")
+
+    def test_default_allowed_origins_are_local(self):
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(allowed_origins(), ["http://127.0.0.1:8000", "http://localhost:8000"])
+
+    def test_cloudflare_hostname_drives_origin_and_host_defaults(self):
+        with patch.dict(os.environ, {"CLOUDFLARE_HOSTNAME": "automata-demo.example.com"}, clear=True):
+            self.assertIn("https://automata-demo.example.com", allowed_origins())
+            self.assertIn("automata-demo.example.com", trusted_hosts())
+            self.assertIn("localhost", trusted_hosts())
+
+    def test_explicit_origin_and_host_config_is_respected(self):
+        with patch.dict(
+            os.environ,
+            {
+                "ALLOWED_ORIGINS": "https://demo.example.com, http://localhost:8000",
+                "ALLOWED_HOSTS": "demo.example.com,localhost",
+            },
+            clear=True,
+        ):
+            self.assertEqual(allowed_origins(), ["https://demo.example.com", "http://localhost:8000"])
+            self.assertEqual(trusted_hosts(), ["demo.example.com", "localhost"])
+
+    def test_tla_timeout_defaults_and_overrides(self):
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(safety_subprocess_timeout_seconds("tlc"), 60)
+        with patch.dict(os.environ, {"SAFETY_TLA_TIMEOUT_SECONDS": "7"}, clear=True):
+            self.assertEqual(safety_subprocess_timeout_seconds("tlc"), 7)
+        with patch.dict(
+            os.environ,
+            {"SAFETY_TLA_TIMEOUT_SECONDS": "7", "SAFETY_TLC_TIMEOUT_SECONDS": "3"},
+            clear=True,
+        ):
+            self.assertEqual(safety_subprocess_timeout_seconds("tlc"), 3)
 
 
 if __name__ == "__main__":

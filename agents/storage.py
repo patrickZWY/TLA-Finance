@@ -1,4 +1,5 @@
 import copy
+from contextvars import ContextVar
 import json
 import os
 from typing import Any, Dict, Optional
@@ -13,33 +14,32 @@ DEFAULT_DATA: Dict[str, Any] = {
     "risk_profile": None,
 }
 
-# When set, all reads/writes go to memory instead of disk (used by web API)
-_session: Optional[Dict[str, Any]] = None
+# When set, all reads/writes go to request-local memory instead of disk.
+# The CLI leaves this unset and continues to use DATA_FILE.
+_session: ContextVar[Optional[Dict[str, Any]]] = ContextVar("finance_agent_session", default=None)
 
 
 def init_session(data: Optional[Dict[str, Any]] = None) -> None:
-    global _session
-    if data:
-        _session = copy.deepcopy(data)
-        for key, val in DEFAULT_DATA.items():
-            if key not in _session:
-                _session[key] = copy.deepcopy(val)
-    else:
-        _session = copy.deepcopy(DEFAULT_DATA)
+    session = copy.deepcopy(data) if data is not None else copy.deepcopy(DEFAULT_DATA)
+    for key, val in DEFAULT_DATA.items():
+        if key not in session:
+            session[key] = copy.deepcopy(val)
+    _session.set(session)
 
 
 def get_session() -> Optional[Dict[str, Any]]:
-    return copy.deepcopy(_session) if _session is not None else None
+    session = _session.get()
+    return copy.deepcopy(session) if session is not None else None
 
 
 def clear_session() -> None:
-    global _session
-    _session = None
+    _session.set(None)
 
 
 def load() -> Dict[str, Any]:
-    if _session is not None:
-        return copy.deepcopy(_session)
+    session = _session.get()
+    if session is not None:
+        return copy.deepcopy(session)
     if not os.path.exists(DATA_FILE):
         return copy.deepcopy(DEFAULT_DATA)
     with open(DATA_FILE) as f:
@@ -51,9 +51,8 @@ def load() -> Dict[str, Any]:
 
 
 def save(data: Dict[str, Any]) -> None:
-    global _session
-    if _session is not None:
-        _session = data
+    if _session.get() is not None:
+        _session.set(copy.deepcopy(data))
         return
     with open(DATA_FILE, "w") as f:
         json.dump(data, f, indent=2, default=str)

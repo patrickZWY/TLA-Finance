@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import os
 from typing import Any
+from urllib.parse import urlparse
 
 
 DEFAULT_OPENAI_MODEL = "gpt-4o-mini"
 DEFAULT_LOCAL_API_KEY = "local-demo-key"
+DEFAULT_ALLOWED_ORIGINS = ("http://127.0.0.1:8000", "http://localhost:8000")
+DEFAULT_ALLOWED_HOSTS = ("127.0.0.1", "localhost", "testserver")
 
 
 def normalize_openai_api_key() -> None:
@@ -58,6 +61,51 @@ def openai_chat_options(**kwargs: Any) -> dict[str, Any]:
     return options
 
 
+def allowed_origins() -> list[str]:
+    configured = _csv_env("ALLOWED_ORIGINS")
+    if configured:
+        return configured
+    hostname = public_hostname()
+    if hostname:
+        return [f"https://{hostname}", *DEFAULT_ALLOWED_ORIGINS]
+    return list(DEFAULT_ALLOWED_ORIGINS)
+
+
+def trusted_hosts() -> list[str]:
+    configured = _csv_env("ALLOWED_HOSTS")
+    if configured:
+        return [_host_value(item) for item in configured]
+
+    hosts = set(DEFAULT_ALLOWED_HOSTS)
+    for origin in allowed_origins():
+        host = _host_value(origin)
+        if host:
+            hosts.add(host)
+    hostname = public_hostname()
+    if hostname:
+        hosts.add(hostname)
+    return sorted(hosts)
+
+
+def public_hostname() -> str | None:
+    for key in ("PUBLIC_HOSTNAME", "CLOUDFLARE_HOSTNAME", "CF_HOSTNAME"):
+        value = os.getenv(key)
+        if value and value.strip():
+            return _host_value(value.strip())
+    return None
+
+
+def safety_subprocess_timeout_seconds(kind: str | None = None) -> int:
+    if kind:
+        per_kind = _positive_int_env(f"SAFETY_{kind.upper()}_TIMEOUT_SECONDS", 0)
+        if per_kind:
+            return per_kind
+    return _positive_int_env(
+        "SAFETY_TLA_TIMEOUT_SECONDS",
+        _positive_int_env("SAFETY_SUBPROCESS_TIMEOUT_SECONDS", 60),
+    )
+
+
 def openai_client():
     from openai import OpenAI
 
@@ -69,3 +117,26 @@ def openai_client():
     if base_url:
         kwargs["base_url"] = base_url
     return OpenAI(**kwargs)
+
+
+def _csv_env(name: str) -> list[str]:
+    value = os.getenv(name, "")
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+def _host_value(value: str) -> str:
+    if value == "*":
+        return value
+    parsed = urlparse(value if "://" in value else f"//{value}", scheme="https")
+    return (parsed.hostname or value).strip()
+
+
+def _positive_int_env(name: str, default: int) -> int:
+    value = os.getenv(name)
+    if value is None or not value.strip():
+        return default
+    try:
+        parsed = int(value)
+    except ValueError:
+        return default
+    return parsed if parsed > 0 else default

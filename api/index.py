@@ -1,4 +1,4 @@
-import copy
+from collections import defaultdict, deque
 import json
 import logging
 import os
@@ -7,6 +7,7 @@ import sys
 import time
 from dataclasses import replace
 from datetime import datetime, timezone
+from math import ceil
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -22,15 +23,26 @@ if _here not in sys.path:
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 load_dotenv()
 
 from agents import budget_agent, debt_agent, goal_agent, investment_agent, storage
-from config import has_openai_api_key, normalize_openai_api_key, openai_chat_options, openai_client, openai_model
+from config import (
+    allowed_origins,
+    has_openai_api_key,
+    normalize_openai_api_key,
+    openai_chat_options,
+    openai_client,
+    openai_model,
+    trusted_hosts,
+)
 import observability
 from safety.agent import TlaSafetyAgentResult
+from safety.artifacts import cleanup_old_safety_artifacts
 from safety.models import FinanceAction, SafetyInputError, SafetyPolicy, dump_actions
 from safety.transformer import (
     ExplicitRequestActionTransformer,
@@ -45,14 +57,190 @@ observability.configure_logging()
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_RATE_LIMITS: Dict[str, tuple[int, int]] = {
+    "/api/semantic-check": (10, 60),
+    "/api/chat": (5, 60),
+    "/api/demo/bad-suggestion": (20, 60),
+}
+
+DEFAULT_REQUEST_LIMITS = {
+    "user_message_chars": 4_000,
+    "finance_advice_chars": 12_000,
+    "history_items": 40,
+    "history_json_bytes": 32_000,
+    "policy_json_bytes": 32_000,
+    "session_json_bytes": 64_000,
+}
+
+
+class InMemoryRateLimiter:
+    def __init__(self, limits: Dict[str, tuple[int, int]]) -> None:
+        self.limits = limits
+        self._hits: Dict[tuple[str, str], deque[float]] = defaultdict(deque)
+
+    def retry_after(self, path: str, client_id: str, now: float | None = None) -> float | None:
+        limit = self.limits.get(path)
+        if limit is None:
+            return None
+
+        max_requests, window_seconds = limit
+        now = time.monotonic() if now is None else now
+        hits = self._hits[(path, client_id)]
+        cutoff = now - window_seconds
+        while hits and hits[0] <= cutoff:
+            hits.popleft()
+
+        if len(hits) >= max_requests:
+            return max(1.0, window_seconds - (now - hits[0]))
+
+        hits.append(now)
+        return None
+
+    def reset(self) -> None:
+        self._hits.clear()
+
+
+class RateLimitMiddleware:
+    def __init__(self, app, limiter: InMemoryRateLimiter) -> None:
+        self.app = app
+        self.limiter = limiter
+
+    async def __call__(self, scope, receive, send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        if scope.get("method") != "OPTIONS":
+            path = scope.get("path", "")
+            headers = _headers_from_scope(scope)
+            client_id = _client_id_from_scope(scope, headers)
+            retry_after = self.limiter.retry_after(path, client_id)
+            if retry_after is not None:
+                response = JSONResponse(
+                    {"detail": "Rate limit exceeded. Try again shortly."},
+                    status_code=429,
+                    headers={"Retry-After": str(ceil(retry_after))},
+                )
+                await response(scope, receive, send)
+                return
+
+        await self.app(scope, receive, send)
+
+
+def _headers_from_scope(scope) -> Dict[str, str]:
+    return {
+        key.decode("latin-1").lower(): value.decode("latin-1")
+        for key, value in scope.get("headers", [])
+    }
+
+
+def _client_id_from_scope(scope, headers: Dict[str, str]) -> str:
+    for header in ("cf-connecting-ip", "x-real-ip", "x-forwarded-for"):
+        value = headers.get(header)
+        if value:
+            return value.split(",", 1)[0].strip()
+    client = scope.get("client")
+    return client[0] if client else "unknown"
+
+
+def request_limits() -> Dict[str, int]:
+    return {
+        key: _positive_int_env(f"API_MAX_{key.upper()}", default)
+        for key, default in DEFAULT_REQUEST_LIMITS.items()
+    }
+
+
+def _positive_int_env(name: str, default: int) -> int:
+    value = os.getenv(name)
+    if value is None or not value.strip():
+        return default
+    try:
+        parsed = int(value)
+    except ValueError:
+        return default
+    return parsed if parsed > 0 else default
+
+
+def _validate_chat_request(req: "ChatRequest") -> None:
+    limits = request_limits()
+    _validate_text_size("message", req.message, limits["user_message_chars"])
+    _validate_history(req.history, limits)
+    if req.session_data is not None:
+        _validate_json_size("session_data", req.session_data, limits["session_json_bytes"])
+        policy = req.session_data.get("safety_policy")
+        if isinstance(policy, dict):
+            _validate_json_size("session_data.safety_policy", policy, limits["policy_json_bytes"])
+
+
+def _validate_demo_request(req: "SafetyDemoRequest") -> None:
+    limits = request_limits()
+    _validate_history(req.history, limits)
+    if req.session_data is not None:
+        _validate_json_size("session_data", req.session_data, limits["session_json_bytes"])
+        policy = req.session_data.get("safety_policy")
+        if isinstance(policy, dict):
+            _validate_json_size("session_data.safety_policy", policy, limits["policy_json_bytes"])
+
+
+def _validate_semantic_check_request(req: "SemanticCheckRequest") -> None:
+    limits = request_limits()
+    _validate_text_size("user_message", req.user_message, limits["user_message_chars"])
+    _validate_text_size("finance_advice", req.finance_advice, limits["finance_advice_chars"])
+    _validate_json_size("policy", req.policy, limits["policy_json_bytes"])
+
+
+def _validate_text_size(field: str, value: str, max_chars: int) -> None:
+    if len(value or "") > max_chars:
+        raise HTTPException(
+            status_code=413,
+            detail=f"{field} exceeds the configured limit of {max_chars} characters.",
+        )
+
+
+def _validate_history(history: List[Dict[str, str]], limits: Dict[str, int]) -> None:
+    if len(history) > limits["history_items"]:
+        raise HTTPException(
+            status_code=413,
+            detail=f"history exceeds the configured limit of {limits['history_items']} items.",
+        )
+    _validate_json_size("history", history, limits["history_json_bytes"])
+
+
+def _validate_json_size(field: str, value: Any, max_bytes: int) -> None:
+    size = len(json.dumps(value, ensure_ascii=False, separators=(",", ":"), default=str).encode("utf-8"))
+    if size > max_bytes:
+        raise HTTPException(
+            status_code=413,
+            detail=f"{field} exceeds the configured limit of {max_bytes} bytes.",
+        )
+
+
+rate_limiter = InMemoryRateLimiter(DEFAULT_RATE_LIMITS)
+
 app = FastAPI(title="Personal Finance Agent")
 
 app.add_middleware(
+    TrustedHostMiddleware,
+    allowed_hosts=trusted_hosts(),
+)
+app.add_middleware(RateLimitMiddleware, limiter=rate_limiter)
+app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["POST", "GET"],
+    allow_origins=allowed_origins(),
+    allow_methods=["POST", "GET", "OPTIONS"],
     allow_headers=["*"],
 )
+
+
+@app.on_event("startup")
+def cleanup_safety_artifacts_on_startup() -> None:
+    removed = cleanup_old_safety_artifacts(_safety_artifact_root())
+    if removed:
+        observability.log_event(
+            logger,
+            "api.safety_artifacts.cleanup",
+            removed_count=len(removed),
+        )
 
 ROUTER_SYSTEM = """You are a finance request router. Analyze the user's message and output ONLY valid JSON.
 
@@ -119,7 +307,7 @@ BAD_SAFETY_DEMOS: Dict[str, Dict[str, str]] = {
 class ChatRequest(BaseModel):
     message: str
     session_data: Optional[Dict[str, Any]] = None
-    history: List[Dict[str, str]] = []
+    history: List[Dict[str, str]] = Field(default_factory=list)
 
 
 class ChatResponse(BaseModel):
@@ -130,7 +318,7 @@ class ChatResponse(BaseModel):
 
 class SafetyDemoRequest(BaseModel):
     session_data: Optional[Dict[str, Any]] = None
-    history: List[Dict[str, str]] = []
+    history: List[Dict[str, str]] = Field(default_factory=list)
     example: Optional[str] = None
 
 
@@ -146,14 +334,15 @@ def chat(req: ChatRequest):
     request_id = observability.new_id("req")
     start = time.perf_counter()
     with observability.scoped_context(request_id=request_id):
-        observability.log_event(
-            logger,
-            "api.chat.start",
-            history_len=len(req.history),
-            has_session_data=req.session_data is not None,
-            message=observability.payload(req.message),
-        )
         try:
+            _validate_chat_request(req)
+            observability.log_event(
+                logger,
+                "api.chat.start",
+                history_len=len(req.history),
+                has_session_data=req.session_data is not None,
+                message=observability.payload(req.message),
+            )
             response = _chat(req)
         except HTTPException as exc:
             observability.log_event(
@@ -191,6 +380,7 @@ def semantic_check(req: SemanticCheckRequest):
     start = time.perf_counter()
     with observability.scoped_context(request_id=request_id):
         try:
+            _validate_semantic_check_request(req)
             return _semantic_check(req)
         except HTTPException:
             raise
@@ -218,6 +408,7 @@ def semantic_check(req: SemanticCheckRequest):
 
 @app.post("/api/demo/bad-suggestion")
 def demo_bad_suggestion(req: SafetyDemoRequest) -> ChatResponse:
+    _validate_demo_request(req)
     storage.init_session(req.session_data)
     history = list(req.history)
 
@@ -357,8 +548,16 @@ class _PrecomputedActionTransformer:
 
 
 def _semantic_run_name() -> str:
+    return _timestamped_run_name("semantic")
+
+
+def _safety_run_name() -> str:
+    return _timestamped_run_name("safety")
+
+
+def _timestamped_run_name(prefix: str) -> str:
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
-    return f"semantic_{stamp}"
+    return f"{prefix}_{stamp}"
 
 
 def _chat(req: ChatRequest) -> ChatResponse:
@@ -546,6 +745,7 @@ def _check_reply_with_tla_safety(user_message: str, finance_reply: str) -> Optio
             result = checker.check(
                 safety_input,
                 policy,
+                run_name=_safety_run_name(),
                 run_model_checker=_should_run_tlc(),
                 run_id=safety_run_id,
             )
@@ -587,6 +787,7 @@ def _recover_from_missing_actions_block(message: str, user_message: str, policy:
         result = checker.check(
             user_message,
             policy,
+            run_name=_timestamped_run_name("safety_recovered"),
             run_model_checker=_should_run_tlc(),
             run_id=str(safety_run_id),
         )

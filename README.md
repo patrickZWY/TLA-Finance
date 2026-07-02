@@ -74,6 +74,8 @@ The extractor maps varied finance vocabulary such as “purchase,” “move,”
 The TLA+ spec models your accounts as finite automata — each canonical action transitions the state, and TLC verifies that no sequence of actions violates your constraints (e.g. overdraft, unauthorized destination, budget exceeded).
 
 Artifacts (`.tla`, `.cfg`, TLC output) are saved per run under `artifacts/safety-runs/`.
+They are not served over HTTP. The API removes old run directories on startup;
+set `SAFETY_ARTIFACT_RETENTION_HOURS` to tune the default 24-hour retention.
 
 ---
 
@@ -168,6 +170,7 @@ export OPENAI_BASE_URL=http://localhost:11434/v1
 export OPENAI_MODEL=qwen3:4b
 export OPENAI_REASONING_EFFORT=none
 export SAFETY_RUN_TLC=1
+export SAFETY_TLA_TIMEOUT_SECONDS=60
 python3 -m uvicorn api.index:app --port 8000
 ```
 
@@ -179,6 +182,23 @@ The app supplies a dummy local API key when `OPENAI_BASE_URL` is set. See
 `docs/local_llm_safety_workbench_design.md` for the workbench architecture and
 `docs/local_llm_semantic_extraction.md` for successful demo scenarios and
 troubleshooting notes.
+
+### Invite-only Cloudflare demo
+
+For a temporary public demo, keep FastAPI bound to loopback and publish it with
+a named Cloudflare Tunnel protected by Cloudflare Access:
+
+```sh
+export CLOUDFLARE_HOSTNAME=automata-demo.example.com
+export TLAPLUS_JAR=/path/to/tla2tools.jar
+bash scripts/run_cloudflare_demo.sh
+cloudflared tunnel run <tunnel-name>
+```
+
+The app uses env-driven CORS/host validation (`ALLOWED_ORIGINS`,
+`ALLOWED_HOSTS`) plus in-process rate limits for the demo endpoints. The full
+Cloudflare Access setup and acceptance checklist are in
+`docs/cloudflare_one_demo.md`.
 
 ---
 

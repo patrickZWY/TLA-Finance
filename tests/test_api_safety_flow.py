@@ -15,6 +15,7 @@ try:
 
     from agents import storage
     from api import index as api_index
+    from safety.models import SafetyInputError, load_actions
 
     API_IMPORT_ERROR = None
 except Exception as exc:  # pragma: no cover - exercised as a skip condition.
@@ -48,12 +49,30 @@ def fake_openai_client_with_router_content(content: str):
     return FakeOpenAI()
 
 
+class FakeActionTransformer:
+    last_raw_content = ""
+
+    def __init__(self, actions=None, error=None):
+        self.actions = actions or []
+        self.error = error
+        self.last_usage_estimate = {"fake": True}
+        if error is not None:
+            self.last_raw_content = "{not-json"
+
+    def transform(self, finance_agent_output: str):
+        if self.error is not None:
+            raise self.error
+        return self.actions
+
+
 @unittest.skipIf(API_IMPORT_ERROR is not None, f"API dependencies unavailable: {API_IMPORT_ERROR}")
 class ApiSafetyFlowTests(unittest.TestCase):
     def setUp(self):
+        api_index.rate_limiter.reset()
         self.client = TestClient(api_index.app)
 
     def tearDown(self):
+        api_index.rate_limiter.reset()
         storage.clear_session()
 
     def test_pending_safety_continue_returns_original_reply(self):
@@ -119,6 +138,62 @@ class ApiSafetyFlowTests(unittest.TestCase):
             )
         self.assertEqual(response.status_code, 500)
         self.assertIn("Chat request failed", response.json()["detail"])
+
+    def test_semantic_check_safe_case_returns_normalized_actions(self):
+        actions = load_actions(load_json_fixture("actions.safe.json"))
+        with patch.object(api_index, "OpenAIActionTransformer", return_value=FakeActionTransformer(actions)):
+            response = self.client.post(
+                "/api/semantic-check",
+                json={
+                    "user_message": "Please make the safe plan.",
+                    "finance_advice": "Move the allowed amount into brokerage.",
+                    "policy": load_json_fixture("policy.dev.json"),
+                    "run_model_checker": False,
+                },
+            )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(payload["safe_to_execute"])
+        self.assertEqual(payload["decision"], "safe")
+        self.assertEqual(len(payload["normalized_actions"]["actions"]), 2)
+
+    def test_semantic_check_unsafe_destination_returns_findings(self):
+        actions = load_actions(load_json_fixture("actions.destination_violation.json"))
+        with patch.object(api_index, "OpenAIActionTransformer", return_value=FakeActionTransformer(actions)):
+            response = self.client.post(
+                "/api/semantic-check",
+                json={
+                    "user_message": "Send money to the outside account.",
+                    "finance_advice": "Transfer funds to an unapproved destination.",
+                    "policy": load_json_fixture("policy.dev.json"),
+                    "run_model_checker": False,
+                },
+            )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertFalse(payload["safe_to_execute"])
+        codes = {finding["code"] for finding in payload["all_findings"]}
+        self.assertIn("disallowed_destination", codes)
+
+    def test_semantic_check_extraction_failure_skips_policy_and_tlc(self):
+        transformer = FakeActionTransformer(error=SafetyInputError("invalid normalized action JSON"))
+        with patch.object(api_index, "OpenAIActionTransformer", return_value=transformer):
+            with patch.object(api_index, "TlaSafetyAgent") as agent_cls:
+                response = self.client.post(
+                    "/api/semantic-check",
+                    json={
+                        "user_message": "Please parse this.",
+                        "finance_advice": "Bad ambiguous output.",
+                        "policy": load_json_fixture("policy.dev.json"),
+                        "run_model_checker": False,
+                    },
+                )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertFalse(payload["safe_to_execute"])
+        self.assertEqual(payload["decision"], "extraction_failed")
+        self.assertEqual(payload["tlc"]["status"], "skipped")
+        agent_cls.assert_not_called()
 
     def test_chat_request_logs_selected_agents_and_safety_status(self):
         with patch.dict(os.environ, {"OBSERVABILITY_ENABLED": "1", "LOG_FORMAT": "json"}, clear=False):

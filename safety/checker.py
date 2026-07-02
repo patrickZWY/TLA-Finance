@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import observability
+from config import safety_subprocess_timeout_seconds
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +83,8 @@ def find_tla_tools_jar() -> Path | None:
     return None
 
 
-def translate_pluscal(tla_path: Path, timeout_seconds: int = 60) -> PlusCalResult:
+def translate_pluscal(tla_path: Path, timeout_seconds: int | None = None) -> PlusCalResult:
+    timeout_seconds = timeout_seconds or safety_subprocess_timeout_seconds("pluscal")
     start = time.perf_counter()
     jar = find_tla_tools_jar()
     if jar is None:
@@ -145,7 +147,8 @@ def translate_pluscal(tla_path: Path, timeout_seconds: int = 60) -> PlusCalResul
     )
 
 
-def run_tlc(tla_path: Path, cfg_path: Path, timeout_seconds: int = 60) -> TlcResult:
+def run_tlc(tla_path: Path, cfg_path: Path, timeout_seconds: int | None = None) -> TlcResult:
+    timeout_seconds = timeout_seconds or safety_subprocess_timeout_seconds("tlc")
     start = time.perf_counter()
     jar = find_tla_tools_jar()
     if jar is None:

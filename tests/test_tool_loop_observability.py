@@ -46,7 +46,7 @@ class ToolLoopObservabilityTests(unittest.TestCase):
         ]
 
         with patch.dict(os.environ, {"OBSERVABILITY_ENABLED": "1", "LOG_FORMAT": "json"}, clear=False):
-            with patch.object(tool_loop, "OpenAI", FakeOpenAI):
+            with patch.object(tool_loop, "openai_client", return_value=FakeOpenAI()):
                 with patch.object(tool_loop, "MAX_STEPS", 2):
                     with self.assertLogs(tool_loop.__name__, level="INFO") as captured:
                         result = tool_loop.run("system", "task", tools, lambda name, args: "{}")
