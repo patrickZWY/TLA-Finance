@@ -7,3 +7,4 @@ finance_data.json
 .vercel
 .env*
 artifacts/safety-runs/
+artifacts/research-eval/

@@ -9,7 +9,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 
 from config import (
     has_openai_api_key,
@@ -239,7 +239,7 @@ Rules:
         raw = _parse_transformer_json(content)
         if not isinstance(raw, dict):
             raise SafetyInputError("OpenAI transformer response must be a JSON object")
-        return load_actions(_normalize_extracted_actions(raw), allow_empty=True)
+        return load_actions(_normalize_extracted_actions(raw, finance_agent_output), allow_empty=True)
 
     def _try_ollama_native_structured(self, finance_agent_output: str) -> list[FinanceAction] | None:
         url = _ollama_native_chat_url()
@@ -277,7 +277,7 @@ Rules:
         if not content:
             return None
         raw = _parse_transformer_json(str(content))
-        return load_actions(_normalize_extracted_actions(raw), allow_empty=True)
+        return load_actions(_normalize_extracted_actions(raw, finance_agent_output), allow_empty=True)
 
     def _try_structured_parse(self, client: object, finance_agent_output: str) -> list[FinanceAction] | None:
         parse = getattr(getattr(getattr(client, "beta", None), "chat", None), "completions", None)
@@ -308,7 +308,7 @@ Rules:
             raw = parsed.model_dump(by_alias=True)
         else:
             raw = parsed.dict(by_alias=True)
-        return load_actions(_normalize_extracted_actions(raw), allow_empty=True)
+        return load_actions(_normalize_extracted_actions(raw, finance_agent_output), allow_empty=True)
 
 
 def _model_user_content(model: str, content: str) -> str:
@@ -355,13 +355,16 @@ def _parse_transformer_json(content: str) -> dict[str, object]:
     return raw
 
 
-def _normalize_extracted_actions(raw: dict[str, object]) -> dict[str, object]:
+def _normalize_extracted_actions(
+    raw: dict[str, object],
+    source_text: str | None = None,
+) -> dict[str, object]:
     actions = raw.get("actions")
     if not isinstance(actions, list):
         return raw
 
     normalized_actions: list[object] = []
-    for item in actions:
+    for index, item in enumerate(actions, start=1):
         if not isinstance(item, dict):
             normalized_actions.append(item)
             continue
@@ -369,10 +372,15 @@ def _normalize_extracted_actions(raw: dict[str, object]) -> dict[str, object]:
         action = normalized.get("action")
         if isinstance(action, str):
             normalized["action"] = _normalize_action_name(action)
+        amount = _amount_value(normalized.get("amount"))
+        if amount is not None and source_text is not None and not _source_contains_amount(source_text, amount):
+            raise SafetyInputError(
+                f"action {index} amount {amount} is not supported by the source text"
+            )
         for key in ("from", "to"):
             value = normalized.get(key)
             if isinstance(value, str):
-                normalized[key] = _normalize_account_name(value)
+                normalized[key] = _normalize_account_name(value, source_text=source_text, field=key)
         normalized_actions.append(normalized)
     return {**raw, "actions": normalized_actions}
 
@@ -390,11 +398,71 @@ def _normalize_action_name(action: str) -> str:
     }.get(canonical, canonical)
 
 
-def _normalize_account_name(account: str) -> str:
+def _normalize_account_name(
+    account: str,
+    *,
+    source_text: str | None = None,
+    field: str = "account",
+) -> str:
     text = account.strip()
     text = re.sub(r"^(?:the|my)\s+", "", text, flags=re.IGNORECASE)
     text = re.sub(r"\s+(?:account|acct)\.?$", "", text, flags=re.IGNORECASE)
-    return text.strip()
+    text = re.sub(r"\s+", " ", text).strip()
+    if ":" in text:
+        text = _repair_or_reject_colon_account(text, source_text, field)
+    if _looks_like_ticker(text):
+        return text
+    return text.lower()
+
+
+def _repair_or_reject_colon_account(text: str, source_text: str | None, field: str) -> str:
+    left, separator, right = text.rpartition(":")
+    left = left.strip()
+    right = right.strip()
+    if not separator or not left or not right:
+        raise SafetyInputError(f"malformed extracted {field} account name: {text}")
+    right_normalized = _normalize_account_name(right, source_text=None, field=field)
+    if (
+        left.lower() in {"broker", "account", "acct"}
+        or right_normalized.startswith(left.lower())
+    ) and source_text is not None and _source_contains_account(source_text, right_normalized):
+        return right_normalized
+    raise SafetyInputError(f"malformed extracted {field} account name: {text}")
+
+
+def _amount_value(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    if isinstance(value, str):
+        text = value.strip().replace(",", "")
+        if text.isdigit():
+            return int(text)
+    return None
+
+
+def _source_contains_amount(source_text: str, amount: int) -> bool:
+    if amount < 0:
+        return False
+    variants = {str(amount), f"{amount:,}"}
+    pattern = "|".join(re.escape(variant) for variant in sorted(variants, key=len, reverse=True))
+    return re.search(rf"(?<!\d)\$?\s*(?:{pattern})(?:\.0+)?(?!\d)", source_text) is not None
+
+
+def _source_contains_account(source_text: str, account: str) -> bool:
+    normalized_source = source_text.lower()
+    normalized_account = account.lower()
+    return re.search(
+        rf"(?<![a-z0-9_-]){re.escape(normalized_account)}(?![a-z0-9_-])",
+        normalized_source,
+    ) is not None
+
+
+def _looks_like_ticker(text: str) -> bool:
+    return bool(re.fullmatch(r"[A-Z]{1,6}", text))
 
 
 def _extract_first_json_object(text: str) -> str | None:

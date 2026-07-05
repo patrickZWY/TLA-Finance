@@ -92,26 +92,50 @@ is already created and routed to `live-demo.zhengwangyuan-patrick.com`; see
 [docs/cloudflare_one_demo.md](docs/cloudflare_one_demo.md) for first-time
 Cloudflare setup.
 
-1. Start the local model server:
+1. Start the local model server in one terminal:
 
 ```sh
 ollama pull qwen3:4b
 ollama serve
 ```
 
-2. In a second terminal, start FastAPI on loopback with the public hostnames
-   trusted by the app:
+If `ollama serve` says port `11434` is already in use, leave the existing
+Ollama server running.
+
+2. In a second terminal, stop any stale FastAPI server on port `8000`:
 
 ```sh
-# From the repo root:
+lsof -nP -iTCP:8000 -sTCP:LISTEN
+kill <PID>
+```
+
+Only use `kill -9 <PID>` if a normal `kill` does not release the port.
+
+3. Start FastAPI on loopback with the public hostnames trusted by the app:
+
+```sh
+cd /Users/zhengwangyuan/repos/TLA-Finance
 source .venv/bin/activate
+
 export PUBLIC_DEMO_HOSTNAME=demo.zhengwangyuan-patrick.com
 export CLOUDFLARE_HOSTNAME=live-demo.zhengwangyuan-patrick.com
-export TLAPLUS_JAR=/path/to/tla2tools.jar
+export OPENAI_BASE_URL=http://localhost:11434/v1
+export OPENAI_MODEL=qwen3:4b
+export OPENAI_REASONING_EFFORT=none
+export SAFETY_RUN_TLC=0
+
 bash scripts/run_cloudflare_demo.sh
 ```
 
-3. In a third terminal, connect Cloudflare to the local FastAPI server:
+For the TLC-backed public demo, set these before running
+`scripts/run_cloudflare_demo.sh`:
+
+```sh
+export TLA_HOME=/Users/zhengwangyuan/Documents/smart/tlc
+export SAFETY_RUN_TLC=1
+```
+
+4. In a third terminal, connect Cloudflare to the local FastAPI server:
 
 ```sh
 cloudflared tunnel run --url http://localhost:8000 tla-finance-demo
@@ -128,15 +152,18 @@ Keep the FastAPI and `cloudflared` terminals running while others use the
 online demo. If you use different hostnames, update both the environment values
 above and the matching Cloudflare tunnel/Worker configuration.
 
-If `run_cloudflare_demo.sh` reports port `8000` is already in use, stop the old
-listener before restarting:
+Useful health checks:
 
 ```sh
-lsof -nP -iTCP:8000 -sTCP:LISTEN
-kill <PID>
+curl -i http://127.0.0.1:8000/api/health
+curl -I https://live-demo.zhengwangyuan-patrick.com
+curl -I https://demo.zhengwangyuan-patrick.com
 ```
 
-Only use `kill -9 <PID>` if a normal `kill` does not release the port.
+If local health is `200` but `live-demo.zhengwangyuan-patrick.com` returns a
+Cloudflare `530`, the `cloudflared tunnel run ...` process is not connected. If
+`demo.zhengwangyuan-patrick.com` returns `503`, the public Worker cannot reach
+the live tunnel hostname.
 
 ## TLA+ Tools
 
@@ -241,6 +268,35 @@ For a faster local safety pass that intentionally skips TLC:
 SAFETY_RUN_TLC=0 python3 -m unittest discover -s tests
 ```
 
+Run the reviewer evidence suite:
+
+```sh
+scripts/run_evidence_suite.sh
+```
+
+Run the semantic extractor benchmark against labeled fixtures:
+
+```sh
+python3 scripts/semantic_eval.py --transformer gold
+```
+
+Run the strict semantic CI gate:
+
+```sh
+python3 scripts/semantic_eval.py \
+  --transformer gold \
+  --min-pass-rate 1 \
+  --min-schema-rate 1 \
+  --min-exact-action-rate 1 \
+  --min-finding-code-rate 1
+```
+
+Run a multi-model semantic extractor matrix:
+
+```sh
+python3 scripts/run_model_eval_matrix.py
+```
+
 ## API Surface
 
 FastAPI is defined in `api/index.py`.
@@ -340,3 +396,7 @@ config.py                     Runtime configuration helpers
   fixture flows, and policy invariants.
 - [docs/cloudflare_one_demo.md](docs/cloudflare_one_demo.md) covers the
   invite-only Cloudflare Access demo path.
+- [docs/research_eval_workflow.md](docs/research_eval_workflow.md) covers the
+  reviewer evidence suite and semantic extractor benchmark.
+- [docs/research_eval_report.md](docs/research_eval_report.md) summarizes the
+  current local model matrix results and observed failure modes.

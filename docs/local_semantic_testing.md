@@ -35,6 +35,10 @@ Add cases to `fixtures/semantic_codex_cases.json`:
 - `codex_generated_actions`: the JSON produced by the prompt above.
 - `policy`: the policy fixture to check against.
 - `expected_finding_codes`: safety findings expected after validation.
+- `category`: broad reviewer grouping, such as `safe`, `unsafe`, or
+  `adversarial`.
+- `risk_type`: the specific behavior being tested.
+- `expected_behavior`: short explanation of what the extractor should do.
 
 The test intentionally rejects fenced `finance-actions` blocks in these cases.
 The point is to exercise natural prose and then test the downstream safety
