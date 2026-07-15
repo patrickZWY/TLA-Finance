@@ -140,10 +140,21 @@ class ExtractedAction(BaseModel):
     amount: int = Field(description="Integer dollar amount.")
     source: str = Field(alias="from", description="Source account, holding, or cash location.")
     destination: str = Field(alias="to", description="Destination account, holding, or cash location.")
+    choice: str | None = Field(default=None, description="Choice/alternative name when the text presents mutually exclusive options.")
 
 
 class ExtractedActions(BaseModel):
     actions: list[ExtractedAction]
+
+
+class ExtractedChoice(BaseModel):
+    name: str
+    actions: list[ExtractedAction]
+
+
+class ExtractedPlan(BaseModel):
+    actions: list[ExtractedAction] | None = None
+    choices: list[ExtractedChoice] | None = None
 
 
 class OpenAIActionTransformer:
@@ -158,6 +169,8 @@ class OpenAIActionTransformer:
 
 Output ONLY valid JSON in this exact shape:
 {"actions":[{"action":"buy|sell|swap|deposit|transfer|withdraw","amount":123,"from":"account","to":"account"}]}
+or, for mutually exclusive alternatives:
+{"choices":[{"name":"fund first","actions":[{"action":"transfer","amount":300,"from":"checking","to":"brokerage"}]}]}
 
 Rules:
 - Read both the user request and finance-agent response when both are present.
@@ -177,6 +190,8 @@ Rules:
   use that same account for both "from" and "to" unless a different funding source is explicit.
 - Parse each action phrase independently. Do not use the source of a later transfer as the source for an
   earlier buy.
+- If the text presents mutually exclusive alternatives using words such as "either", "or", "choice",
+  "option", or named branches, return every alternative using the `choices` format above. Do not flatten alternatives into one sequence.
 - Example: "Grab 300 of VTI in the brokerage account now" means
   {"action":"buy","amount":300,"from":"brokerage","to":"brokerage"}.
 - If an account, holding, or destination is implicit but clearly stated elsewhere, use that name.
@@ -213,9 +228,15 @@ Rules:
             self.model,
         )
 
-        native_structured = self._try_ollama_native_structured(finance_agent_output)
-        if native_structured is not None:
-            return native_structured
+        try:
+            native_structured = self._try_ollama_native_structured(finance_agent_output)
+            if native_structured is not None:
+                return native_structured
+        except SafetyInputError as exc:
+            retry = self._try_ollama_native_structured_retry(finance_agent_output, exc)
+            if retry is not None:
+                return retry
+            raise
 
         structured = self._try_structured_parse(client, finance_agent_output)
         if structured is not None:
@@ -239,22 +260,43 @@ Rules:
         raw = _parse_transformer_json(content)
         if not isinstance(raw, dict):
             raise SafetyInputError("OpenAI transformer response must be a JSON object")
-        return load_actions(_normalize_extracted_actions(raw, finance_agent_output), allow_empty=True)
+        return _load_extracted_actions(raw, finance_agent_output)
 
-    def _try_ollama_native_structured(self, finance_agent_output: str) -> list[FinanceAction] | None:
+    def _try_ollama_native_structured(
+        self,
+        finance_agent_output: str,
+        *,
+        correction_error: SafetyInputError | None = None,
+        rejected_content: str = "",
+    ) -> list[FinanceAction] | None:
         url = _ollama_native_chat_url()
         if url is None:
             return None
 
+        messages = [
+            {"role": "system", "content": self.SYSTEM_PROMPT},
+            {"role": "user", "content": _model_user_content(self.model, finance_agent_output)},
+        ]
+        if correction_error is not None:
+            messages.extend([
+                {"role": "assistant", "content": rejected_content},
+                {
+                    "role": "user",
+                    "content": (
+                        "The previous JSON was rejected by deterministic validation: "
+                        f"{correction_error}. Re-read the original finance text and return corrected "
+                        "JSON only. Every amount must appear as a standalone amount in the original "
+                        "text; do not shorten, round, infer, or invent amounts."
+                    ),
+                },
+            ])
+
         body = {
             "model": self.model,
-            "messages": [
-                {"role": "system", "content": self.SYSTEM_PROMPT},
-                {"role": "user", "content": _model_user_content(self.model, finance_agent_output)},
-            ],
+            "messages": messages,
             "stream": False,
             "think": False,
-            "format": _model_json_schema(ExtractedActions),
+            "format": _model_json_schema(ExtractedPlan),
             "options": {
                 "temperature": 0,
                 "num_predict": self.max_tokens,
@@ -277,7 +319,23 @@ Rules:
         if not content:
             return None
         raw = _parse_transformer_json(str(content))
-        return load_actions(_normalize_extracted_actions(raw, finance_agent_output), allow_empty=True)
+        return _load_extracted_actions(raw, finance_agent_output)
+
+    def _try_ollama_native_structured_retry(
+        self,
+        finance_agent_output: str,
+        validation_error: SafetyInputError,
+    ) -> list[FinanceAction] | None:
+        rejected_content = self.last_raw_content
+        try:
+            return self._try_ollama_native_structured(
+                finance_agent_output,
+                correction_error=validation_error,
+                rejected_content=rejected_content,
+            )
+        except SafetyInputError:
+            self.last_raw_content = rejected_content
+            return None
 
     def _try_structured_parse(self, client: object, finance_agent_output: str) -> list[FinanceAction] | None:
         parse = getattr(getattr(getattr(client, "beta", None), "chat", None), "completions", None)
@@ -292,7 +350,7 @@ Rules:
                     {"role": "system", "content": self.SYSTEM_PROMPT},
                     {"role": "user", "content": _model_user_content(self.model, finance_agent_output)},
                 ],
-                response_format=ExtractedActions,
+                response_format=ExtractedPlan,
                 max_tokens=self.max_tokens,
                 temperature=0,
             )
@@ -308,7 +366,7 @@ Rules:
             raw = parsed.model_dump(by_alias=True)
         else:
             raw = parsed.dict(by_alias=True)
-        return load_actions(_normalize_extracted_actions(raw, finance_agent_output), allow_empty=True)
+        return _load_extracted_actions(raw, finance_agent_output)
 
 
 def _model_user_content(model: str, content: str) -> str:
@@ -383,6 +441,18 @@ def _normalize_extracted_actions(
                 normalized[key] = _normalize_account_name(value, source_text=source_text, field=key)
         normalized_actions.append(normalized)
     return {**raw, "actions": normalized_actions}
+
+
+def _load_extracted_actions(raw: dict[str, object], source_text: str) -> list[FinanceAction]:
+    actions = load_actions(_normalize_extracted_actions(raw, source_text), allow_empty=True)
+    choice_signals = re.search(r"\b(either|choice\s+[a-z0-9]|option\s+[a-z0-9]|alternative)\b", source_text, re.IGNORECASE)
+    if choice_signals and actions and not any(action.choice is not None for action in actions):
+        raise SafetyInputError(
+            "The advice contains alternatives, but the extractor did not preserve named choice branches."
+        )
+    if any(action.choice is not None for action in actions) and any(action.choice is None for action in actions):
+        raise SafetyInputError("Every action in a choice proposal must name its choice branch.")
+    return actions
 
 
 def _normalize_action_name(action: str) -> str:

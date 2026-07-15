@@ -16,6 +16,7 @@ from safety.models import SafetyInputError, SafetyPolicy, dump_actions
 from safety.tla_generator import generate_tla, write_tla_artifacts
 from safety.transformer import ActionTransformer, JsonActionTransformer
 from safety.validator import SafetyFinding, evaluate_policy
+from safety.visualization import build_violation_visualization
 
 
 UserDecision = Literal["stop", "continue"]
@@ -36,6 +37,7 @@ class TlaSafetyAgentResult:
     tlc: dict[str, object]
     transformer_usage: dict[str, object]
     observability: dict[str, object]
+    violation_visualization: dict[str, Any] | None = None
 
     @property
     def requires_user_decision(self) -> bool:
@@ -57,6 +59,7 @@ class TlaSafetyAgentResult:
             "tlc": self.tlc,
             "transformer_usage": self.transformer_usage,
             "observability": self.observability,
+            "violation_visualization": self.violation_visualization,
         }
 
 
@@ -166,6 +169,14 @@ class TlaSafetyAgent:
                 "output": "TLC run skipped.",
             }
 
+        visualization = build_violation_visualization(
+            actions,
+            resolved_policy,
+            findings,
+            tlc_status=str(tlc.get("status", "unknown")),
+            dot_path=artifact_dir / "tlc_state_graph.dot",
+        )
+
         decision = _resolve_decision(findings, user_decision)
         observability_info: dict[str, object] = {
             "run_id": run_id,
@@ -188,6 +199,7 @@ class TlaSafetyAgent:
             tlc=tlc,
             transformer_usage=transformer_usage,
             observability=observability_info,
+            violation_visualization=visualization,
         )
         (artifact_dir / "report.json").write_text(
             json.dumps(result.to_json(), indent=2) + "\n",
@@ -234,7 +246,7 @@ class TlaSafetyAgent:
                 "output": "TLC skipped because PlusCal translation did not complete.",
             }
 
-        result = run_tlc(tla_path, cfg_path)
+        result = run_tlc(tla_path, cfg_path, dot_path=artifact_dir / "tlc_state_graph.dot")
         tlc = result.to_json()
         (artifact_dir / "tlc_output.txt").write_text(result.output, encoding="utf-8")
         if result.status == "not_configured":

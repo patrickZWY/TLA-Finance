@@ -169,8 +169,43 @@
       font-size: 12px;
       line-height: 1.4;
     }
+    .visualization { display: block; }
+    .visualization:target, .visualization.focused { box-shadow: 0 0 0 2px #ff696166, 0 0 28px #ff696133; }
+    .journey-callout { display: none; width: 100%; border: 1px solid #ff696188; background: #2a1719; color: #ffd0cd; border-radius: 7px; padding: 11px 12px; align-items: center; justify-content: space-between; gap: 12px; font-size: 13px; }
+    .journey-callout strong { display: block; margin-bottom: 2px; }
+    .journey-callout button { border-color: #ff696188; color: #ffd0cd; white-space: nowrap; }
+    .visual-summary { padding: 10px 12px; border: 1px solid #ff696155; border-radius: 6px; background: #251719; color: #ffd0cd; font-size: 13px; }
+    .journey-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(250px, .42fr); gap: 12px; }
+    .journey-scroll { overflow-x: auto; padding-bottom: 5px; }
+    .journey { display: flex; align-items: stretch; gap: 8px; min-width: max-content; }
+    .journey-edge { align-self: center; color: var(--muted); font-size: 18px; }
+    .state-node { width: 220px; border: 1px solid var(--border); background: var(--panel2); border-radius: 7px; padding: 10px; color: var(--text); text-align: left; display: grid; gap: 6px; font-weight: 400; }
+    .state-node:hover, .state-node.selected { border-color: var(--accent); }
+    .state-node.failure { border-color: var(--bad); background: #2a1719; box-shadow: inset 0 0 0 1px #ff696133; }
+    .node-title { font-weight: 700; font-size: 13px; }
+    .node-meta { color: var(--muted); font: 11px ui-monospace, monospace; white-space: normal; }
+    .state-node.failure .node-meta { color: #ffd0cd; }
+    .detail-panel { border: 1px solid var(--border); border-radius: 7px; background: #12161d; padding: 10px; min-height: 160px; }
+    .detail-panel h3 { margin: 0 0 8px; font-size: 13px; }
+    .detail-panel pre { padding: 0; max-height: 290px; border-radius: 0; }
+    .tlc-details { border: 1px solid var(--border); border-radius: 7px; background: #12161d; }
+    .tlc-details h3 { margin: 0; padding: 10px; border-bottom: 1px solid var(--border); font-size: 13px; }
+    .graph-controls { display: flex; gap: 6px; padding: 0 10px 10px; }
+    .tlc-graph-info { color: var(--muted); font-size: 12px; padding: 0 10px 10px; }
+    .icon-button { width: 30px; height: 28px; padding: 0; font-size: 16px; }
+    .graph-toggle { width: auto; padding: 0 9px; font-size: 12px; }
+    .tlc-canvas { width: 100%; height: 330px; display: block; border-top: 1px solid var(--border); background: var(--code); touch-action: none; cursor: grab; }
+    .tlc-canvas:active { cursor: grabbing; }
+    .tlc-edge { stroke: #6d7787; stroke-width: 1.5; marker-end: url(#arrow); }
+    .tlc-edge.path { stroke: var(--bad); stroke-width: 2.5; }
+    .tlc-node { fill: #202632; stroke: #6d7787; }
+    .tlc-node.path { fill: #402023; stroke: var(--bad); stroke-width: 2; }
+    .tlc-label { fill: var(--text); font: 11px ui-monospace, monospace; text-anchor: middle; pointer-events: none; }
+    .tlc-node-group { cursor: pointer; }
+    .tlc-node-group:hover .tlc-node { stroke: var(--accent); stroke-width: 2.5; }
+    .tlc-state-detail { margin: 10px; border: 1px solid var(--border); border-radius: 6px; max-height: 180px; }
     @media (max-width: 980px) {
-      main, .result-grid, .grid2 { grid-template-columns: 1fr; }
+      main, .result-grid, .grid2, .journey-layout { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -190,7 +225,6 @@
     <section>
       <div class="section-head">
         <h2>Input</h2>
-        <button onclick="loadExample()">Load example</button>
       </div>
       <div class="body">
         <label>
@@ -253,6 +287,10 @@
         </div>
       </div>
       <div class="body">
+        <div class="journey-callout" id="journeyCallout">
+          <div><strong>Unsafe plan detected</strong><span id="journeyCalloutText"></span></div>
+          <button type="button" onclick="showViolationJourney()">View violation journey ↓</button>
+        </div>
         <div class="result-grid">
           <div class="result">
             <h3>Local Model Normalized Actions</h3>
@@ -279,8 +317,36 @@
         </div>
       </div>
     </section>
+
+    <section class="wide visualization" id="violationVisualization">
+      <div class="section-head"><h2>Visualization</h2><span class="badge" id="visualizationBadge">Run a check to populate graphs</span></div>
+      <div class="body">
+        <div class="visual-summary" id="visualSummary"></div>
+        <div class="journey-layout" id="journeyPanel" style="display:none;">
+          <div class="journey-scroll"><div class="journey" id="violationJourney"></div></div>
+          <aside class="detail-panel"><h3>State details</h3><pre id="stateDetail">Select a state to inspect it.</pre></aside>
+        </div>
+        <div class="tlc-details" id="tlcDetails">
+          <h3>TLC State Graph</h3>
+          <div id="tlcUnavailable" class="empty"></div>
+          <div id="tlcGraphWrap" style="display:none;">
+            <div class="tlc-graph-info" id="tlcGraphInfo"></div>
+            <div class="graph-controls">
+              <button class="icon-button" id="graphFit" title="Fit graph to view" aria-label="Fit graph to view">⊡</button>
+              <button class="icon-button" id="graphZoomIn" title="Zoom in" aria-label="Zoom in">+</button>
+              <button class="icon-button" id="graphZoomOut" title="Zoom out" aria-label="Zoom out">−</button>
+              <button class="icon-button" id="graphReset" title="Reset zoom and pan" aria-label="Reset zoom and pan">↺</button>
+              <button class="graph-toggle" id="graphPathOnly" title="Show only the counterexample path">Counterexample only</button>
+            </div>
+            <svg class="tlc-canvas" id="tlcCanvas" viewBox="0 0 900 300" role="img" aria-label="TLC state graph"></svg>
+            <pre class="tlc-state-detail" id="tlcStateDetail">Select a state to inspect its TLC values.</pre>
+          </div>
+        </div>
+      </div>
+    </section>
   </main>
 
+  <script src="/vendor/graph-view-1.0.0.js"></script>
   <script>
     const STORAGE_KEY = 'semantic_safety_workbench_v1';
     const examples = [
@@ -312,6 +378,48 @@
         name: 'Unsafe order: buy before funding',
         user: 'I want the fastest sequence.',
         advice: 'Grab 300 worth of VTI in the brokerage account now, and after that move 300 from checking into brokerage so the cash is restored.',
+        policy: {
+          budget: 600,
+          max_individual_action_amount: 300,
+          account_balances: { checking: 300, brokerage: 0 },
+          allowed_destination_accounts: ['brokerage'],
+          allowed_action_types: ['buy', 'transfer'],
+        },
+      },
+      {
+        name: 'TLC walkthrough: 12-step route fails at the end',
+        user: 'Route cash through my accounts in the listed order and verify every transition.',
+        advice: `Execute these transfers in this exact order:
+1. Transfer 100 from checking to brokerage.
+2. Transfer 50 from brokerage to savings.
+3. Transfer 75 from checking to emergency.
+4. Transfer 25 from emergency to brokerage.
+5. Transfer 40 from brokerage to savings.
+6. Transfer 30 from savings to checking.
+7. Transfer 60 from checking to brokerage.
+8. Transfer 20 from brokerage to emergency.
+9. Transfer 10 from emergency to savings.
+10. Transfer 15 from savings to brokerage.
+11. Transfer 35 from brokerage to checking.
+12. Transfer 80 from brokerage to savings.`,
+        policy: {
+          budget: 600,
+          max_individual_action_amount: 100,
+          account_balances: { checking: 1000, brokerage: 0, savings: 0, emergency: 0 },
+          allowed_destination_accounts: ['checking', 'brokerage', 'savings', 'emergency'],
+          allowed_action_types: ['transfer'],
+        },
+      },
+      {
+        name: 'Choice demo: fund first or buy first',
+        user: 'I need to choose one way to buy $300 of VTI using a newly opened brokerage account.',
+        advice: `Choice A — Fund first (expected safe)
+While the brokerage balance is 0, when I choose “Fund first”, transfer 300 from checking to brokerage, then buy 300 of VTI from brokerage in brokerage.
+
+Choice B — Buy first (expected unsafe)
+While the brokerage balance is 0, when I choose “Buy first”, buy 300 of VTI from brokerage in brokerage, then transfer 300 from checking to brokerage.
+
+The workbench shall evaluate both choices before approving either one.`,
         policy: {
           budget: 600,
           max_individual_action_amount: 300,
@@ -354,6 +462,7 @@
         option.textContent = example.name;
         select.appendChild(option);
       });
+      select.addEventListener('change', loadExample);
       const saved = loadState();
       if (saved) {
         document.getElementById('userMessage').value = saved.userMessage || '';
@@ -449,6 +558,7 @@
       document.getElementById('pythonFindings').innerHTML = '<div class="empty">Waiting for normalized actions.</div>';
       document.getElementById('tlcStatus').textContent = 'Waiting for policy and TLC result...';
       document.getElementById('artifactStatus').textContent = 'Artifacts will appear after the run.';
+      resetVisualizationForRun();
 
       try {
         const res = await fetch('/api/semantic-check', {
@@ -506,6 +616,130 @@
         transformer_usage: data.transformer_usage,
         observability: data.observability,
       }, null, 2);
+      renderViolationVisualization(data.violation_visualization);
+    }
+
+    function renderViolationVisualization(visualization) {
+      const section = document.getElementById('violationVisualization');
+      const journeyPanel = document.getElementById('journeyPanel');
+      const badge = document.getElementById('visualizationBadge');
+      if (!visualization) {
+        document.getElementById('visualSummary').textContent = 'No visualization is available because action extraction did not complete.';
+        journeyPanel.style.display = 'none';
+        badge.textContent = 'No graph available'; badge.className = 'badge warn';
+        hideViolationJourney();
+        renderTlcGraph({ status: 'unavailable', message: 'Run a completed TLC check to see its state graph.' }, []);
+        return;
+      }
+      const journey = visualization.journey;
+      if (!journey || !journey.first_violating_state) {
+        const choices = visualization.choices || [];
+        const unsafeChoices = choices.filter((choice) => !choice.safe);
+        document.getElementById('visualSummary').textContent = choices.length
+          ? (unsafeChoices.length
+            ? `Choice analysis blocked this plan: ${unsafeChoices.map((choice) => choice.name).join(', ')} violates the policy. TLC explores every choice below.`
+            : `All ${choices.length} named choices satisfy the policy. Explore the TLC state graph below.`)
+          : 'No policy violation was found. Explore the TLC state graph below.';
+        journeyPanel.style.display = 'none';
+        badge.textContent = unsafeChoices.length ? 'Unsafe choice' : 'Safe run'; badge.className = unsafeChoices.length ? 'badge bad' : 'badge ok';
+        hideViolationJourney();
+        renderTlcGraph(visualization.tlc_graph, []);
+        return;
+      }
+      journeyPanel.style.display = '';
+      badge.textContent = 'Unsafe plan'; badge.className = 'badge bad';
+      const failure = journey.nodes.find((node) => node.state_number === journey.first_violating_state);
+      const finding = failure.violations[0] || {};
+      document.getElementById('visualSummary').textContent = `Blocked by ${finding.code || 'policy violation'} at action ${failure.action_index} / state ${failure.state_number}: ${finding.message || ''}`;
+      const callout = document.getElementById('journeyCallout');
+      callout.style.display = 'flex';
+      document.getElementById('journeyCalloutText').textContent = `Action ${failure.action_index} violates ${finding.code || 'a safety policy'}. Follow the red state to see why.`;
+      const target = document.getElementById('violationJourney');
+      target.replaceChildren();
+      journey.nodes.forEach((node, index) => {
+        if (index) { const arrow = document.createElement('span'); arrow.className = 'journey-edge'; arrow.textContent = '→'; target.appendChild(arrow); }
+        const button = document.createElement('button');
+        button.className = `state-node ${node.violations.length ? 'failure' : ''}`;
+        const title = document.createElement('span'); title.className = 'node-title'; title.textContent = node.kind === 'initial' ? 'Start state' : `State ${node.state_number} · action ${node.action_index}`;
+        const meta = document.createElement('span'); meta.className = 'node-meta';
+        meta.textContent = node.action ? `${node.action.action} ${node.action.amount}: ${node.action.from} → ${node.action.to}` : `Budget ${node.budget}`;
+        const outflow = document.createElement('span'); outflow.className = 'node-meta'; outflow.textContent = `Outflow ${node.total_outflow} / ${node.budget}`;
+        button.append(title, meta, outflow);
+        if (node.violations.length) { const violation = document.createElement('span'); violation.className = 'node-meta'; violation.textContent = node.violations.map((item) => item.code).join(', '); button.appendChild(violation); }
+        button.addEventListener('click', () => { target.querySelectorAll('.selected').forEach((item) => item.classList.remove('selected')); button.classList.add('selected'); document.getElementById('stateDetail').textContent = JSON.stringify(node, null, 2); });
+        target.appendChild(button);
+        if (node.state_number === journey.first_violating_state) button.click();
+      });
+      renderTlcGraph(visualization.tlc_graph, journey.counterexample_path);
+      // An unsafe run should lead directly to its explanation instead of
+      // leaving the user to search below the technical result panels.
+      window.setTimeout(showViolationJourney, 50);
+    }
+
+    function resetVisualizationForRun() {
+      document.getElementById('visualSummary').textContent = 'Building the state graphs…';
+      document.getElementById('journeyPanel').style.display = 'none';
+      const badge = document.getElementById('visualizationBadge'); badge.textContent = 'Building graphs'; badge.className = 'badge warn';
+      hideViolationJourney();
+      renderTlcGraph({ status: 'unavailable', message: 'Waiting for TLC.' }, []);
+    }
+
+    function hideViolationJourney() {
+      document.getElementById('journeyCallout').style.display = 'none';
+      document.getElementById('violationVisualization').classList.remove('focused');
+    }
+
+    function showViolationJourney() {
+      const section = document.getElementById('violationVisualization');
+      section.classList.add('focused');
+      section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      window.setTimeout(() => section.classList.remove('focused'), 1800);
+    }
+
+    function renderTlcGraph(graph, path, counterexampleOnly = false) {
+      const unavailable = document.getElementById('tlcUnavailable'); const wrap = document.getElementById('tlcGraphWrap');
+      if (!graph || graph.status !== 'available') { unavailable.textContent = (graph && graph.message) || 'TLC graph is unavailable.'; unavailable.style.display = ''; wrap.style.display = 'none'; return; }
+      unavailable.style.display = 'none'; wrap.style.display = '';
+      const svg = document.getElementById('tlcCanvas'); svg.replaceChildren();
+      const ns = 'http://www.w3.org/2000/svg'; const defs = document.createElementNS(ns, 'defs'); defs.innerHTML = '<marker id="arrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7 z" fill="#6d7787"/></marker>'; svg.appendChild(defs);
+      const content = document.createElementNS(ns, 'g'); svg.appendChild(content);
+      const allNodes = graph.nodes || []; const allEdges = graph.edges || [];
+      const pathIds = new Set((graph.counterexample_node_ids || path || []).map(String));
+      const violationIds = new Set((graph.violating_node_ids || []).map(String));
+      const nodes = counterexampleOnly && pathIds.size ? allNodes.filter((node) => pathIds.has(String(node.id))) : allNodes;
+      const edges = counterexampleOnly && pathIds.size ? allEdges.filter((edge) => pathIds.has(String(edge.from)) && pathIds.has(String(edge.to))) : allEdges;
+      const layout = layoutTlcGraph(nodes, edges); const positions = layout.positions;
+      svg.setAttribute('viewBox', `0 0 ${layout.width} ${layout.height}`);
+      const scope = counterexampleOnly && pathIds.size ? 'counterexample path' : 'all explored states';
+      document.getElementById('tlcGraphInfo').textContent = `Showing ${scope}: ${nodes.length} TLC state${nodes.length === 1 ? '' : 's'} · click a state to inspect its values · drag to pan or use the controls to zoom`;
+      edges.forEach((edge) => { const a = positions.get(edge.from), b = positions.get(edge.to); if (!a || !b) return; const line = document.createElementNS(ns, 'line'); line.setAttribute('x1', a.x + 38); line.setAttribute('y1', a.y); line.setAttribute('x2', b.x - 38); line.setAttribute('y2', b.y); line.setAttribute('class', `tlc-edge ${violationIds.has(String(edge.to)) ? 'path' : ''}`); content.appendChild(line); const label = document.createElementNS(ns, 'text'); label.setAttribute('x', (a.x + b.x) / 2); label.setAttribute('y', (a.y + b.y) / 2 - 9); label.setAttribute('class', 'tlc-label'); label.textContent = readableTlcAction(edge.label); content.appendChild(label); });
+      nodes.forEach((node, index) => { const point = positions.get(node.id); const group = document.createElementNS(ns, 'g'); group.setAttribute('class', 'tlc-node-group'); group.setAttribute('role', 'button'); group.setAttribute('tabindex', '0'); group.setAttribute('aria-label', `Inspect TLC state S${index}`); const circle = document.createElementNS(ns, 'circle'); circle.setAttribute('cx', point.x); circle.setAttribute('cy', point.y); circle.setAttribute('r', '38'); circle.setAttribute('class', `tlc-node ${violationIds.has(String(node.id)) ? 'path' : ''}`); const label = document.createElementNS(ns, 'text'); label.setAttribute('x', point.x); label.setAttribute('y', point.y + 4); label.setAttribute('class', 'tlc-label'); label.textContent = `S${index}`; group.append(circle, label); const selectState = (event) => { event.stopPropagation(); document.getElementById('tlcStateDetail').textContent = `State S${index}\n\n${node.label}`; }; group.addEventListener('pointerdown', (event) => event.stopPropagation()); group.addEventListener('pointerup', selectState); group.addEventListener('click', selectState); group.addEventListener('keydown', (event) => { if (event.key === 'Enter' || event.key === ' ') selectState(event); }); content.appendChild(group); });
+      const view = new GraphView(svg, content); document.getElementById('graphFit').onclick = () => view.fit(); document.getElementById('graphZoomIn').onclick = () => view.zoom(1.2); document.getElementById('graphZoomOut').onclick = () => view.zoom(.8); document.getElementById('graphReset').onclick = () => view.reset();
+      const toggle = document.getElementById('graphPathOnly');
+      toggle.disabled = !pathIds.size;
+      toggle.textContent = counterexampleOnly ? 'Show all states' : 'Counterexample only';
+      toggle.title = counterexampleOnly ? 'Show every explored TLC state' : 'Show only the highlighted counterexample path';
+      toggle.onclick = () => renderTlcGraph(graph, path, !counterexampleOnly);
+      if (nodes[0]) document.getElementById('tlcStateDetail').textContent = `State S0\n\n${nodes[0].label}`;
+    }
+
+    function readableTlcAction(label) {
+      const match = /^Lbl_(\d+)$/.exec(String(label || ''));
+      return match ? `Action ${match[1]}` : String(label || 'Next');
+    }
+
+    function layoutTlcGraph(nodes, edges) {
+      const incoming = new Map(nodes.map((node) => [node.id, 0]));
+      const outgoing = new Map(nodes.map((node) => [node.id, []]));
+      edges.forEach((edge) => { if (incoming.has(edge.to) && outgoing.has(edge.from)) { incoming.set(edge.to, incoming.get(edge.to) + 1); outgoing.get(edge.from).push(edge.to); } });
+      const layers = new Map(); const queue = nodes.filter((node) => incoming.get(node.id) === 0).map((node) => node.id);
+      queue.forEach((id) => layers.set(id, 0));
+      for (let cursor = 0; cursor < queue.length; cursor += 1) { const id = queue[cursor]; outgoing.get(id).forEach((next) => { incoming.set(next, incoming.get(next) - 1); layers.set(next, Math.max(layers.get(next) ?? 0, (layers.get(id) ?? 0) + 1)); if (incoming.get(next) === 0) queue.push(next); }); }
+      nodes.forEach((node, index) => { if (!layers.has(node.id)) layers.set(node.id, index); });
+      const rows = new Map(); nodes.forEach((node) => { const layer = layers.get(node.id); if (!rows.has(layer)) rows.set(layer, []); rows.get(layer).push(node.id); });
+      const positions = new Map(); rows.forEach((ids, layer) => ids.forEach((id, row) => positions.set(id, { x: 85 + layer * 180, y: 75 + row * 110 })));
+      const maxLayer = Math.max(0, ...rows.keys()); const maxRows = Math.max(1, ...[...rows.values()].map((ids) => ids.length));
+      return { positions, width: Math.max(360, 170 + maxLayer * 180), height: Math.max(180, 150 + (maxRows - 1) * 110) };
     }
 
     function renderExtraction(data) {

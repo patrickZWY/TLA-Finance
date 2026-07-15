@@ -44,6 +44,7 @@ class FinanceAction:
     amount: int
     source: str
     destination: str
+    choice: str | None = None
 
     @classmethod
     def from_json(cls, raw: dict[str, Any], index: int) -> "FinanceAction":
@@ -63,15 +64,22 @@ class FinanceAction:
         if not destination:
             raise SafetyInputError(f"action {index} has an empty to account")
 
-        return cls(action=action, amount=amount, source=source, destination=destination)
+        choice_raw = raw.get("choice")
+        choice = str(choice_raw).strip() if choice_raw is not None else None
+        if choice == "":
+            raise SafetyInputError(f"action {index} has an empty choice name")
+        return cls(action=action, amount=amount, source=source, destination=destination, choice=choice)
 
     def to_json(self) -> dict[str, Any]:
-        return {
+        payload = {
             "action": self.action,
             "amount": self.amount,
             "from": self.source,
             "to": self.destination,
         }
+        if self.choice is not None:
+            payload["choice"] = self.choice
+        return payload
 
 
 @dataclass(frozen=True)
@@ -149,6 +157,27 @@ class SafetyPolicy:
 
 
 def load_actions(raw: dict[str, Any], allow_empty: bool = False) -> list[FinanceAction]:
+    if "choices" in raw:
+        if raw.get("actions") is not None:
+            raise SafetyInputError("choices JSON must not also contain an actions list")
+        choices_raw = raw["choices"]
+        if not isinstance(choices_raw, list) or len(choices_raw) < 2:
+            raise SafetyInputError("choices JSON must contain at least two choices")
+        actions: list[FinanceAction] = []
+        for choice_index, choice_raw in enumerate(choices_raw, start=1):
+            if not isinstance(choice_raw, dict):
+                raise SafetyInputError(f"choice {choice_index} must be an object")
+            name = str(choice_raw.get("name", "")).strip()
+            branch_actions = choice_raw.get("actions")
+            if not name:
+                raise SafetyInputError(f"choice {choice_index} has an empty name")
+            if not isinstance(branch_actions, list) or not branch_actions:
+                raise SafetyInputError(f"choice {choice_index} must contain a non-empty actions list")
+            for action_index, action_raw in enumerate(branch_actions, start=1):
+                if not isinstance(action_raw, dict):
+                    raise SafetyInputError(f"choice {choice_index} action {action_index} must be an object")
+                actions.append(FinanceAction.from_json({**action_raw, "choice": name}, action_index))
+        return actions
     actions_raw = raw.get("actions")
     if not isinstance(actions_raw, list):
         raise SafetyInputError("actions JSON must contain an actions list")
@@ -164,6 +193,15 @@ def load_actions(raw: dict[str, Any], allow_empty: bool = False) -> list[Finance
 
 
 def dump_actions(actions: list[FinanceAction]) -> dict[str, Any]:
+    choice_names = [name for name in dict.fromkeys(action.choice for action in actions) if name is not None]
+    if choice_names:
+        return {"choices": [
+            {"name": name, "actions": [
+                {key: value for key, value in action.to_json().items() if key != "choice"}
+                for action in actions if action.choice == name
+            ]}
+            for name in choice_names
+        ]}
     return {"actions": [action.to_json() for action in actions]}
 
 

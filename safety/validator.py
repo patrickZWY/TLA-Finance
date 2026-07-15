@@ -13,6 +13,7 @@ class SafetyFinding:
     message: str
     action_index: int | None = None
     severity: str = "error"
+    choice: str | None = None
 
     def to_json(self) -> dict[str, object]:
         payload: dict[str, object] = {
@@ -22,6 +23,8 @@ class SafetyFinding:
         }
         if self.action_index is not None:
             payload["action_index"] = self.action_index
+        if self.choice is not None:
+            payload["choice"] = self.choice
         return payload
 
 
@@ -32,6 +35,31 @@ def evaluate_policy(actions: list[FinanceAction], policy: SafetyPolicy) -> list[
     and is kept aligned with the generated TLA invariants.
     """
 
+    choice_names = {action.choice for action in actions if action.choice is not None}
+    if choice_names:
+        if len(choice_names) < 2 or any(action.choice is None for action in actions):
+            return [SafetyFinding(
+                code="invalid_choice_structure",
+                message="Choice actions must contain at least two fully named alternatives.",
+            )]
+        findings: list[SafetyFinding] = []
+        for choice in dict.fromkeys(action.choice for action in actions):
+            branch = [action for action in actions if action.choice == choice]
+            findings.extend(
+                SafetyFinding(
+                    code=finding.code,
+                    message=finding.message,
+                    action_index=finding.action_index,
+                    severity=finding.severity,
+                    choice=choice,
+                )
+                for finding in _evaluate_sequence(branch, policy)
+            )
+        return findings
+    return _evaluate_sequence(actions, policy)
+
+
+def _evaluate_sequence(actions: list[FinanceAction], policy: SafetyPolicy) -> list[SafetyFinding]:
     findings: list[SafetyFinding] = []
     balances = dict(policy.account_balances)
     total_outflow = 0

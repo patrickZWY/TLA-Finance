@@ -480,18 +480,29 @@ def _semantic_check(req: SemanticCheckRequest) -> Dict[str, Any]:
         run_id=run_id,
     )
     report = result.to_json()
+    # The run directory is intentionally retained for local operators, but it
+    # is not a browser capability.  Return only a non-addressable summary.
+    public_pluscal = _public_checker_status(report["pluscal"])
+    public_tlc = _public_checker_status(report["tlc"])
+    public_report = {
+        **report,
+        "artifacts": {"generated": True},
+        "pluscal": public_pluscal,
+        "tlc": public_tlc,
+    }
     response = {
         "safe_to_execute": result.safe_to_execute,
         "decision": result.decision,
         "normalized_actions": dump_actions(actions),
         "python_policy_findings": [finding.to_json() for finding in policy_findings],
         "all_findings": report["findings"],
-        "pluscal": report["pluscal"],
-        "tlc": report["tlc"],
-        "artifacts": report["artifacts"],
+        "pluscal": public_pluscal,
+        "tlc": public_tlc,
+        "artifacts": public_report["artifacts"],
         "transformer_usage": report["transformer_usage"],
         "observability": report["observability"],
-        "report": report,
+        "violation_visualization": report["violation_visualization"],
+        "report": public_report,
     }
     observability.log_event(
         logger,
@@ -534,7 +545,17 @@ def _semantic_extraction_error_response(
         "artifacts": {},
         "transformer_usage": getattr(transformer, "last_usage_estimate", {}),
         "observability": {"status": "extraction_failed"},
+        "violation_visualization": None,
         "report": None,
+    }
+
+
+def _public_checker_status(status: Dict[str, Any]) -> Dict[str, Any]:
+    """Remove command/output strings that can reveal local artifact paths."""
+
+    return {
+        "status": status.get("status", "unknown"),
+        "returncode": status.get("returncode"),
     }
 
 
@@ -929,6 +950,7 @@ def _failed_safety_result(message: str, code: str = "safety_checker_error") -> T
             "finding_codes": [code],
             "model_checker_enabled": False,
         },
+        violation_visualization=None,
     )
 
 

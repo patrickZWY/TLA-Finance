@@ -223,6 +223,26 @@ The Python policy layer checks:
 The PlusCal/TLC layer checks the generated finite-state model for the same
 invariants and makes order-sensitive failures visible in model-checker output.
 
+### Possible Direction: EARS Requirements Before Formalization
+
+The workbench currently extracts normalized actions (and, where applicable,
+named action choices) directly from finance advice. A possible future layer is
+[EARS (Easy Approach to Requirements Syntax)](https://alistairmavin.com/ears/):
+a lightweight, structured natural-language form such as:
+
+```text
+While the brokerage balance is zero,
+when the user selects "buy first",
+the Finance Safety Workbench shall block the action.
+```
+
+EARS is **not part of the current execution path**. It could become a
+reviewable intermediate representation between free-form advice and the
+choices/TLA+ model, especially for preconditions, triggers, exceptions, and
+either/or alternatives. The safety decision would remain grounded in the
+normalized choice model and TLC results; EARS would make the translation more
+auditable rather than replace formal checking.
+
 ## Useful Commands
 
 Run the safety CLI on structured fixture actions without requiring TLA+ tools:

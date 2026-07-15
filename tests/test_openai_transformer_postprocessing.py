@@ -1,7 +1,26 @@
 import unittest
+from unittest.mock import patch
 
 from safety.models import SafetyInputError, load_actions
-from safety.transformer import _normalize_extracted_actions
+from safety.transformer import OpenAIActionTransformer, _normalize_extracted_actions
+
+
+class _FakeOllamaResponse:
+    def __init__(self, content: str) -> None:
+        self.content = content
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+    def read(self) -> bytes:
+        return (
+            '{"message":{"content":'
+            + __import__("json").dumps(self.content)
+            + "}}"
+        ).encode("utf-8")
 
 
 class OpenAITransformerPostprocessingTests(unittest.TestCase):
@@ -67,6 +86,34 @@ class OpenAITransformerPostprocessingTests(unittest.TestCase):
 
         with self.assertRaisesRegex(SafetyInputError, "amount 30"):
             _normalize_extracted_actions(raw, source)
+
+    def test_ollama_retry_can_correct_validator_rejected_amount(self):
+        source = "First move 300 from checking into brokerage, then buy 300 of VTI inside brokerage."
+        first = """{
+  "actions": [
+    {"action": "transfer", "amount": 300, "from": "checking", "to": "brokerage"},
+    {"action": "buy", "amount": 30, "from": "brokerage", "to": "brokerage"}
+  ]
+}"""
+        second = """{
+  "actions": [
+    {"action": "transfer", "amount": 300, "from": "checking", "to": "brokerage"},
+    {"action": "buy", "amount": 300, "from": "brokerage", "to": "brokerage"}
+  ]
+}"""
+        transformer = OpenAIActionTransformer(model="qwen3:4b")
+
+        with patch("safety.transformer.openai_base_url", return_value="http://localhost:11434/v1"):
+            with patch(
+                "safety.transformer.urllib.request.urlopen",
+                side_effect=[_FakeOllamaResponse(first), _FakeOllamaResponse(second)],
+            ):
+                with self.assertRaisesRegex(SafetyInputError, "amount 30") as caught:
+                    transformer._try_ollama_native_structured(source)
+                actions = transformer._try_ollama_native_structured_retry(source, caught.exception)
+
+        self.assertIsNotNone(actions)
+        self.assertEqual([action.amount for action in actions or []], [300, 300])
 
     def test_preserves_uppercase_holding_ticker(self):
         source = "Swap 100 from VTI to BND."

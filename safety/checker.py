@@ -147,7 +147,12 @@ def translate_pluscal(tla_path: Path, timeout_seconds: int | None = None) -> Plu
     )
 
 
-def run_tlc(tla_path: Path, cfg_path: Path, timeout_seconds: int | None = None) -> TlcResult:
+def run_tlc(
+    tla_path: Path,
+    cfg_path: Path,
+    timeout_seconds: int | None = None,
+    dot_path: Path | None = None,
+) -> TlcResult:
     timeout_seconds = timeout_seconds or safety_subprocess_timeout_seconds("tlc")
     start = time.perf_counter()
     jar = find_tla_tools_jar()
@@ -168,10 +173,14 @@ def run_tlc(tla_path: Path, cfg_path: Path, timeout_seconds: int | None = None) 
         "-cp",
         str(jar),
         "tlc2.TLC",
+    ]
+    if dot_path is not None:
+        command.extend(["-dump", "dot,actionlabels,colorize", dot_path.name])
+    command.extend([
         "-config",
         cfg_path.name,
         tla_path.name,
-    ]
+    ])
 
     try:
         completed = subprocess.run(

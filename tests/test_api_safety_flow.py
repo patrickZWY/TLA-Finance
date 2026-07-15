@@ -156,6 +156,7 @@ class ApiSafetyFlowTests(unittest.TestCase):
         self.assertTrue(payload["safe_to_execute"])
         self.assertEqual(payload["decision"], "safe")
         self.assertEqual(len(payload["normalized_actions"]["actions"]), 2)
+        self.assertIsNone(payload["violation_visualization"]["journey"])
 
     def test_semantic_check_unsafe_destination_returns_findings(self):
         actions = load_actions(load_json_fixture("actions.destination_violation.json"))
@@ -174,6 +175,8 @@ class ApiSafetyFlowTests(unittest.TestCase):
         self.assertFalse(payload["safe_to_execute"])
         codes = {finding["code"] for finding in payload["all_findings"]}
         self.assertIn("disallowed_destination", codes)
+        self.assertEqual(payload["violation_visualization"]["journey"]["first_violating_state"], 1)
+        self.assertNotIn("directory", payload["artifacts"])
 
     def test_semantic_check_extraction_failure_skips_policy_and_tlc(self):
         transformer = FakeActionTransformer(error=SafetyInputError("invalid normalized action JSON"))
@@ -193,6 +196,7 @@ class ApiSafetyFlowTests(unittest.TestCase):
         self.assertFalse(payload["safe_to_execute"])
         self.assertEqual(payload["decision"], "extraction_failed")
         self.assertEqual(payload["tlc"]["status"], "skipped")
+        self.assertIsNone(payload["violation_visualization"])
         agent_cls.assert_not_called()
 
     def test_chat_request_logs_selected_agents_and_safety_status(self):
