@@ -243,6 +243,46 @@ either/or alternatives. The safety decision would remain grounded in the
 normalized choice model and TLC results; EARS would make the translation more
 auditable rather than replace formal checking.
 
+### Possible Direction: Execution Semantics for Concurrent and Asynchronous Plans
+
+The current canonical action list is evaluated as an ordered, immediate
+sequence: a transfer credits its destination before a later action is checked.
+That is suitable for the current demo, but it does not represent operational
+timing such as asynchronous transfer settlement or independently submitted
+orders.
+
+A future version could have the semantic extractor identify execution
+semantics alongside the finance actions. For example, it could distinguish
+between an explicitly ordered instruction:
+
+```text
+Transfer $300 to brokerage, then wait for it to settle before buying $300 of VTI.
+```
+
+and concurrent submission:
+
+```text
+Submit a $300 transfer to brokerage and immediately submit a $300 VTI buy.
+Do not wait for the transfer to settle.
+```
+
+The normalized plan could represent action IDs, settlement dependencies, and a
+mode such as `ordered`, `concurrent`, or `ambiguous`. Natural-language cues
+such as “then,” “after it clears,” and “once funds are available” would create
+an order dependency; “simultaneously,” “submit both,” “immediately,” and
+“without waiting” would permit concurrent execution. A bare “and” should not
+silently be treated as a guaranteed order: it could be modeled conservatively
+as ambiguous or trigger a request for confirmation.
+
+For explicitly ordered plans, the Python preflight and a sequential TLA+
+model would retain today’s behavior. For concurrent or ambiguous plans, the
+generated TLA+ model could nondeterministically interleave submission and
+settlement events. That would let TLC find a counterexample where, for example,
+a brokerage buy executes before a pending transfer settles, even though the
+same actions pass a Python preflight under the intended serial ordering. This
+would make the difference between policy validation and temporal safety
+checking visible without introducing an artificial disagreement between them.
+
 ## Useful Commands
 
 Run the safety CLI on structured fixture actions without requiring TLA+ tools:
