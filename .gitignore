@@ -1,10 +1,43 @@
+# Python environments and caches
 __pycache__/
 .venv/
 *.pyc
 *.pyo
+
+# Local environment and secret configuration
 .env
+.env.*
+!.env.example
+.netrc
+
+# API credentials and SSH/private keys
+.ssh/
+.vast_api_key
+.vastai/
+.config/vastai/
+credentials.json
+credentials.*.json
+secrets.json
+secrets.*.json
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+id_ecdsa*
+
+# Local personal/application data
 finance_data.json
-.vercel
-.env*
-artifacts/safety-runs/
-artifacts/research-eval/
+*.db
+*.sqlite
+*.sqlite3
+*.log
+
+# Generated reports, prompts, model outputs, and downloaded weights
+artifacts/
+models/
+.cache/huggingface/
+
+# Local deployment state
+.vercel/
