@@ -192,6 +192,10 @@ Rules:
   earlier buy.
 - If the text presents mutually exclusive alternatives using words such as "either", "or", "choice",
   "option", or named branches, return every alternative using the `choices` format above. Do not flatten alternatives into one sequence.
+- Words such as "then", "next", "first", and "after that" describe one sequential plan, not choices; put
+  every sequential step in one top-level `actions` list and do not add a `choice` field to those actions.
+- Return exactly one top-level representation: either `actions`, or `choices` with at least two mutually
+  exclusive branches. Never return both `actions` and `choices` in the same object.
 - Example: "Grab 300 of VTI in the brokerage account now" means
   {"action":"buy","amount":300,"from":"brokerage","to":"brokerage"}.
 - If an account, holding, or destination is implicit but clearly stated elsewhere, use that name.
@@ -238,17 +242,41 @@ Rules:
                 return retry
             raise
 
-        structured = self._try_structured_parse(client, finance_agent_output)
-        if structured is not None:
-            return structured
+        try:
+            structured = self._try_structured_parse(client, finance_agent_output)
+            if structured is not None:
+                return structured
+            return self._request_openai_json(client, finance_agent_output)
+        except SafetyInputError as exc:
+            # OpenAI-compatible local models occasionally satisfy the JSON
+            # schema while violating cross-field rules (for example, emitting
+            # both `actions` and `choices`). Give the model one bounded chance
+            # to correct the validator error, then fail closed.
+            return self._request_openai_json(
+                client,
+                finance_agent_output,
+                correction_error=exc,
+                rejected_content=self.last_raw_content,
+            )
 
+    def _request_openai_json(
+        self,
+        client: object,
+        finance_agent_output: str,
+        *,
+        correction_error: SafetyInputError | None = None,
+        rejected_content: str = "",
+    ) -> list[FinanceAction]:
         response = client.chat.completions.create(
             **openai_chat_options(
                 model=self.model,
-                messages=[
-                    {"role": "system", "content": self.SYSTEM_PROMPT},
-                    {"role": "user", "content": _model_user_content(self.model, finance_agent_output)},
-                ],
+                messages=_openai_transform_messages(
+                    self.SYSTEM_PROMPT,
+                    self.model,
+                    finance_agent_output,
+                    correction_error=correction_error,
+                    rejected_content=rejected_content,
+                ),
                 max_tokens=self.max_tokens,
                 temperature=0,
             )
@@ -345,14 +373,17 @@ Rules:
 
         try:
             response = parse_create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": self.SYSTEM_PROMPT},
-                    {"role": "user", "content": _model_user_content(self.model, finance_agent_output)},
-                ],
-                response_format=ExtractedPlan,
-                max_tokens=self.max_tokens,
-                temperature=0,
+                **openai_chat_options(
+                    model=self.model,
+                    messages=_openai_transform_messages(
+                        self.SYSTEM_PROMPT,
+                        self.model,
+                        finance_agent_output,
+                    ),
+                    response_format=ExtractedPlan,
+                    max_tokens=self.max_tokens,
+                    temperature=0,
+                )
             )
         except Exception:
             return None
@@ -363,10 +394,39 @@ Rules:
         if parsed is None:
             return None
         if hasattr(parsed, "model_dump"):
-            raw = parsed.model_dump(by_alias=True)
+            raw = parsed.model_dump(by_alias=True, exclude_none=True)
         else:
-            raw = parsed.dict(by_alias=True)
+            raw = parsed.dict(by_alias=True, exclude_none=True)
         return _load_extracted_actions(raw, finance_agent_output)
+
+
+def _openai_transform_messages(
+    system_prompt: str,
+    model: str,
+    finance_agent_output: str,
+    *,
+    correction_error: SafetyInputError | None = None,
+    rejected_content: str = "",
+) -> list[dict[str, str]]:
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": _model_user_content(model, finance_agent_output)},
+    ]
+    if correction_error is not None:
+        if rejected_content:
+            messages.append({"role": "assistant", "content": rejected_content})
+        messages.append({
+            "role": "user",
+            "content": (
+                "The previous JSON was rejected by deterministic validation: "
+                f"{correction_error}. Re-read the original finance text and return one corrected "
+                "JSON object only. Use `actions` for a sequential plan, including steps joined by "
+                "`then`; use `choices` only when there are at least two mutually exclusive branches, "
+                "and never include both fields. Copy each plain account name and standalone amount "
+                "from the original text exactly; do not append punctuation, shorten, infer, or invent values."
+            ),
+        })
+    return messages
 
 
 def _model_user_content(model: str, content: str) -> str:

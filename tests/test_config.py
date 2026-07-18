@@ -1,17 +1,25 @@
 import os
+import sys
 import unittest
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
 
 from config import (
     DEFAULT_LOCAL_API_KEY,
+    DEFAULT_OPENAI_MAX_RETRIES,
     DEFAULT_OPENAI_MODEL,
+    DEFAULT_OPENAI_TIMEOUT_SECONDS,
     allowed_origins,
     has_openai_api_key,
     openai_api_key,
     openai_base_url,
     openai_chat_options,
+    openai_client,
+    openai_disable_thinking_enabled,
     openai_json_mode_enabled,
+    openai_max_retries,
     openai_model,
+    openai_timeout_seconds,
     safety_subprocess_timeout_seconds,
     trusted_hosts,
 )
@@ -45,6 +53,62 @@ class ConfigTests(unittest.TestCase):
     def test_reasoning_effort_is_added_when_configured(self):
         with patch.dict(os.environ, {"OPENAI_REASONING_EFFORT": "none"}, clear=True):
             self.assertEqual(openai_chat_options(model="m")["reasoning_effort"], "none")
+
+    def test_disable_thinking_adds_vllm_chat_template_option(self):
+        with patch.dict(os.environ, {"OPENAI_DISABLE_THINKING": "1"}, clear=True):
+            self.assertTrue(openai_disable_thinking_enabled())
+            options = openai_chat_options(model="qwen3-32b")
+        self.assertEqual(
+            options["extra_body"],
+            {"chat_template_kwargs": {"enable_thinking": False}},
+        )
+
+    def test_chat_options_preserve_explicit_response_format_and_extra_body(self):
+        schema = object()
+        with patch.dict(os.environ, {"OPENAI_DISABLE_THINKING": "1"}, clear=True):
+            options = openai_chat_options(
+                response_format=schema,
+                extra_body={"top_k": 20, "chat_template_kwargs": {"custom": True}},
+            )
+        self.assertIs(options["response_format"], schema)
+        self.assertEqual(options["extra_body"]["top_k"], 20)
+        self.assertEqual(
+            options["extra_body"]["chat_template_kwargs"],
+            {"custom": True, "enable_thinking": False},
+        )
+
+    def test_openai_network_limits_default_and_override(self):
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(openai_timeout_seconds(), DEFAULT_OPENAI_TIMEOUT_SECONDS)
+            self.assertEqual(openai_max_retries(), DEFAULT_OPENAI_MAX_RETRIES)
+        with patch.dict(
+            os.environ,
+            {"OPENAI_TIMEOUT_SECONDS": "45.5", "OPENAI_MAX_RETRIES": "0"},
+            clear=True,
+        ):
+            self.assertEqual(openai_timeout_seconds(), 45.5)
+            self.assertEqual(openai_max_retries(), 0)
+
+    def test_openai_client_uses_remote_endpoint_and_network_limits(self):
+        client_class = MagicMock()
+        with patch.dict(
+            os.environ,
+            {
+                "OPENAI_API_KEY": "secret-test-key",
+                "OPENAI_BASE_URL": "http://127.0.0.1:18000/v1",
+                "OPENAI_TIMEOUT_SECONDS": "30",
+                "OPENAI_MAX_RETRIES": "0",
+            },
+            clear=True,
+        ):
+            with patch.dict(sys.modules, {"openai": SimpleNamespace(OpenAI=client_class)}):
+                openai_client()
+        client_class.assert_called_once_with(
+            api_key="secret-test-key",
+            base_url="http://127.0.0.1:18000/v1",
+            timeout=30.0,
+            max_retries=0,
+        )
 
     def test_default_allowed_origins_are_local(self):
         with patch.dict(os.environ, {}, clear=True):

@@ -9,6 +9,8 @@ from urllib.parse import urlparse
 
 DEFAULT_OPENAI_MODEL = "gpt-4o-mini"
 DEFAULT_LOCAL_API_KEY = "local-demo-key"
+DEFAULT_OPENAI_TIMEOUT_SECONDS = 120.0
+DEFAULT_OPENAI_MAX_RETRIES = 1
 DEFAULT_ALLOWED_ORIGINS = ("http://127.0.0.1:8000", "http://localhost:8000")
 DEFAULT_ALLOWED_HOSTS = ("127.0.0.1", "localhost", "testserver")
 PUBLIC_HOSTNAME_ENV_KEYS = ("PUBLIC_HOSTNAME", "PUBLIC_DEMO_HOSTNAME", "CLOUDFLARE_HOSTNAME", "CF_HOSTNAME")
@@ -52,13 +54,37 @@ def openai_reasoning_effort() -> str | None:
     return value.strip() if value and value.strip() else None
 
 
+def openai_disable_thinking_enabled() -> bool:
+    """Return whether compatible reasoning models should skip thinking output."""
+
+    return _boolean_env("OPENAI_DISABLE_THINKING", False)
+
+
+def openai_timeout_seconds() -> float:
+    """Bound each OpenAI-compatible request, including remote model calls."""
+
+    return _positive_float_env("OPENAI_TIMEOUT_SECONDS", DEFAULT_OPENAI_TIMEOUT_SECONDS)
+
+
+def openai_max_retries() -> int:
+    """Limit automatic retries so an unavailable remote model fails promptly."""
+
+    return _nonnegative_int_env("OPENAI_MAX_RETRIES", DEFAULT_OPENAI_MAX_RETRIES)
+
+
 def openai_chat_options(**kwargs: Any) -> dict[str, Any]:
     options = dict(kwargs)
-    if openai_json_mode_enabled():
+    if openai_json_mode_enabled() and "response_format" not in options:
         options["response_format"] = {"type": "json_object"}
     reasoning_effort = openai_reasoning_effort()
     if reasoning_effort:
         options["reasoning_effort"] = reasoning_effort
+    if openai_disable_thinking_enabled():
+        extra_body = dict(options.get("extra_body") or {})
+        chat_template_kwargs = dict(extra_body.get("chat_template_kwargs") or {})
+        chat_template_kwargs.setdefault("enable_thinking", False)
+        extra_body["chat_template_kwargs"] = chat_template_kwargs
+        options["extra_body"] = extra_body
     return options
 
 
@@ -119,7 +145,10 @@ def safety_subprocess_timeout_seconds(kind: str | None = None) -> int:
 def openai_client():
     from openai import OpenAI
 
-    kwargs: dict[str, str] = {}
+    kwargs: dict[str, Any] = {
+        "timeout": openai_timeout_seconds(),
+        "max_retries": openai_max_retries(),
+    }
     api_key = openai_api_key()
     base_url = openai_base_url()
     if api_key:
@@ -150,3 +179,32 @@ def _positive_int_env(name: str, default: int) -> int:
     except ValueError:
         return default
     return parsed if parsed > 0 else default
+
+
+def _positive_float_env(name: str, default: float) -> float:
+    value = os.getenv(name)
+    if value is None or not value.strip():
+        return default
+    try:
+        parsed = float(value)
+    except ValueError:
+        return default
+    return parsed if parsed > 0 else default
+
+
+def _nonnegative_int_env(name: str, default: int) -> int:
+    value = os.getenv(name)
+    if value is None or not value.strip():
+        return default
+    try:
+        parsed = int(value)
+    except ValueError:
+        return default
+    return parsed if parsed >= 0 else default
+
+
+def _boolean_env(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None or not value.strip():
+        return default
+    return value.strip().lower() not in {"0", "false", "no", "off"}

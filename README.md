@@ -84,6 +84,53 @@ Open `http://127.0.0.1:8000`. If Java/TLA+ tools are not configured yet,
 uncheck **Run PlusCal/TLC** in the UI for extractor and Python-policy smoke
 tests, or set up TLA+ with [docs/tla_setup_macos.md](docs/tla_setup_macos.md).
 
+## Use the Vast.ai vLLM Backend
+
+Keep the rented vLLM server private and connect to it through SSH. FastAPI uses
+local port `8000`, so the model tunnel must use a different local port. If the
+old tunnel is still using `-L 8000:...`, stop it with `Ctrl-C` and start this in
+terminal 1:
+
+```sh
+export VAST_INSTANCE_ID=<INSTANCE_ID>
+ssh -i ~/.ssh/vast_ai_ed25519 \
+  -N \
+  -o ExitOnForwardFailure=yes \
+  -o ServerAliveInterval=30 \
+  -o ServerAliveCountMax=3 \
+  -L 127.0.0.1:18000:127.0.0.1:18000 \
+  "$(vastai ssh-url "${VAST_INSTANCE_ID}")"
+```
+
+The bind address is explicitly `127.0.0.1`, so the model API is not exposed to
+other devices on the Mac's network. Leave that terminal open.
+
+In terminal 2, load the server token without printing or saving it, then launch
+TLA-Finance with the Vast-specific defaults:
+
+```sh
+cd /Users/zhengwangyuan/repos/TLA-Finance
+export VAST_INSTANCE_ID=<INSTANCE_ID>
+export VLLM_API_KEY="$(
+  ssh -i ~/.ssh/vast_ai_ed25519 \
+    "$(vastai ssh-url "${VAST_INSTANCE_ID}")" \
+    'printf %s "$OPEN_BUTTON_TOKEN"'
+)"
+bash scripts/run_vast_backend.sh
+```
+
+The helper verifies `/v1/models` before starting the app, selects the served
+model name `qwen3-32b`, disables Qwen3 thinking for reliable JSON extraction,
+and bounds remote requests to 120 seconds with one retry. It never writes the
+token to the repository. Open `http://127.0.0.1:8000` and submit one of the
+workbench examples. Opening the bare model URL `/v1` is not a health check;
+`/v1/models` is the discovery endpoint.
+
+When finished, stop FastAPI and the SSH tunnel with `Ctrl-C`, then stop or
+destroy the Vast instance so hourly billing does not continue. Treat the
+current marketplace host as suitable only for synthetic/non-sensitive demo
+inputs unless you intentionally move to a stronger trust boundary.
+
 ## Run Locally, Then Share Online
 
 Use this path when the demo runs on your Mac but invited users need to open it
@@ -395,6 +442,9 @@ tool execution provider-agnostic for OpenAI-compatible chat APIs.
 | `OPENAI_MODEL` | `gpt-4o-mini` | Chat/extraction model name. |
 | `OPENAI_JSON_MODE` | `1` | Set to `0` if a local server rejects OpenAI JSON-mode `response_format`. |
 | `OPENAI_REASONING_EFFORT` | unset | Set to `none` for local thinking/reasoning models that support it. |
+| `OPENAI_DISABLE_THINKING` | `0` | Set to `1` for Qwen3/vLLM JSON-only calls; sends `chat_template_kwargs.enable_thinking=false`. |
+| `OPENAI_TIMEOUT_SECONDS` | `120` | Per-request timeout for OpenAI-compatible endpoints. |
+| `OPENAI_MAX_RETRIES` | `1` | Automatic SDK retries after the initial request; set to `0` to fail immediately. |
 | `SAFETY_RUN_TLC` | `1` | Enables PlusCal/TLC in routes that do not specify `run_model_checker`. |
 | `SAFETY_ACTION_TRANSFORMER` | `semantic` | API chat transformer. Supports `semantic`, `block`, and `explicit`. |
 | `SAFETY_ARTIFACT_ROOT` | `artifacts/safety-runs` | Directory for generated inputs, TLA/CFG files, tool output, and reports. |
