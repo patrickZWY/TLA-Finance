@@ -256,6 +256,48 @@ def lifecycle_document(control_kind):
     return FsirDocument(**raw)
 
 
+def impossible_liveness_document():
+    document = lifecycle_document("sequence")
+    raw = document.model_dump(by_alias=True, exclude_none=True)
+    buy_status = next(
+        state
+        for state in raw["state"]
+        if state["id"] == "state.buy.status"
+    )
+    buy_status["type"]["values"].append("cancelled")
+    raw["properties"] = [
+        prop for prop in raw["properties"] if prop["kind"] != "liveness"
+    ]
+    raw["properties"].append(
+        {
+            "id": "property.lifecycle.buy_cancelled",
+            "kind": "liveness",
+            "formula": {
+                "op": "eventually",
+                "args": [
+                    {
+                        "op": "eq",
+                        "left": {
+                            "op": "state_ref",
+                            "state_id": "state.buy.status",
+                        },
+                        "right": {
+                            "op": "literal",
+                            "value": "cancelled",
+                            "value_type": "enum",
+                        },
+                    }
+                ],
+            },
+            "severity": "error",
+            "source_span_ids": [
+                raw["meta"]["source_document_span_id"]
+            ],
+        }
+    )
+    return FsirDocument(**raw)
+
+
 def run_tlc(lowered):
     with tempfile.TemporaryDirectory() as directory:
         paths = write_lowered_fsir(lowered, Path(directory))
@@ -485,15 +527,36 @@ class FsirLoweringTests(unittest.TestCase):
             if entry["fsir_property_id"]
             == "property.lifecycle.buy_fills"
         }
-        temporal = classify_tlc_result(
-            12,
-            "Error: Temporal properties were violated.",
-            temporal_map,
+        temporal_output = (
+            "Error: Temporal properties were violated.\n"
+            "Error: The following behavior constitutes a counter-example:\n"
         )
+        temporal = classify_tlc_result(13, temporal_output, temporal_map)
         self.assertEqual(temporal.kind, "temporal_violation")
         self.assertEqual(
             temporal.violated_property_ids,
             ("property.lifecycle.buy_fills",),
+        )
+        self.assertEqual(
+            classify_tlc_result(12, temporal_output, temporal_map).kind,
+            "infrastructure_failure",
+        )
+        self.assertEqual(
+            classify_tlc_result(
+                13,
+                "Error: Temporal properties were violated.",
+                temporal_map,
+            ).kind,
+            "infrastructure_failure",
+        )
+        self.assertEqual(
+            classify_tlc_result(
+                13,
+                temporal_output
+                + "Error: Cannot find source file for module MissingModule.\n",
+                temporal_map,
+            ).kind,
+            "infrastructure_failure",
         )
 
     def test_unsupported_assumptions_and_fairness_formulas_fail_closed(self):
@@ -741,6 +804,65 @@ class FsirLoweringTests(unittest.TestCase):
         trace = normalize_tlc_counterexample(output, lowered.source_map)
         self.assertTrue(trace, output)
         self.assertIn(document.actions[4].id, [step["event_id"] for step in trace])
+
+    @unittest.skipUnless(TLA_TOOLS_JAR.is_file(), "tla2tools.jar is unavailable")
+    def test_real_tlc_classifies_single_liveness_counterexample(self):
+        document = impossible_liveness_document()
+        lowered = lower_fsir(
+            document,
+            "FsirLifecycleTemporal",
+            tla_tools_jar=TLA_TOOLS_JAR,
+        )
+        completed = run_tlc(lowered)
+        output = completed.stdout + completed.stderr
+        self.assertEqual(completed.returncode, 13, output)
+        classification = classify_tlc_result(
+            completed.returncode,
+            output,
+            lowered.source_map,
+        )
+        self.assertEqual(classification.kind, "temporal_violation")
+        self.assertEqual(
+            classification.violated_property_ids,
+            ("property.lifecycle.buy_cancelled",),
+        )
+        trace = normalize_tlc_counterexample(output, lowered.source_map)
+        self.assertEqual(len(trace), 6, output)
+        self.assertEqual(
+            [step["event_id"] for step in trace],
+            [action.id for action in document.actions],
+        )
+        report = {
+            "expected": "temporal_violation",
+            "observed": classification.kind,
+            "property_ids": list(classification.violated_property_ids),
+            "trace_steps": len(trace),
+            "satisfied": True,
+        }
+        manifest = build_execution_evidence_manifest(
+            lowered=lowered,
+            tlc_output=output,
+            normalized_trace=trace,
+            classification=classification,
+            execution_report=report,
+        )
+        verify_execution_evidence(
+            lowered=lowered,
+            tlc_output=output,
+            normalized_trace=trace,
+            classification=classification,
+            execution_report=report,
+            execution_manifest=manifest,
+        )
+        with self.assertRaisesRegex(ValueError, "execution evidence"):
+            verify_execution_evidence(
+                lowered=lowered,
+                tlc_output=output + "\nmutated",
+                normalized_trace=trace,
+                classification=classification,
+                execution_report=report,
+                execution_manifest=manifest,
+            )
 
 
 if __name__ == "__main__":

@@ -22,7 +22,10 @@ from safety.fsir_lowering import (
     verify_lowered_fsir,
     write_lowered_fsir,
 )
-from tests.test_fsir_lowering import lifecycle_document
+from tests.test_fsir_lowering import (
+    impossible_liveness_document,
+    lifecycle_document,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -67,8 +70,20 @@ def main():
     lowered_by_mode = {}
     execution_records = {}
     all_ok = True
-    for mode, control, expected, expected_property_ids in (
-        ("ordered", "sequence", "passed", []),
+    for (
+        mode,
+        control,
+        expected,
+        expected_property_ids,
+        document_factory,
+    ) in (
+        (
+            "ordered",
+            "sequence",
+            "passed",
+            [],
+            lambda: lifecycle_document("sequence"),
+        ),
         (
             "concurrent",
             "partial_order",
@@ -77,9 +92,17 @@ def main():
                 "property.safe_transfer_then_buy_order_sensitive."
                 "no_negative_cash"
             ],
+            lambda: lifecycle_document("partial_order"),
+        ),
+        (
+            "temporal",
+            "sequence",
+            "temporal_violation",
+            ["property.lifecycle.buy_cancelled"],
+            impossible_liveness_document,
         ),
     ):
-        document = lifecycle_document(control)
+        document = document_factory()
         lowered = lower_fsir(
             document,
             f"FsirLifecycle{mode.title()}",

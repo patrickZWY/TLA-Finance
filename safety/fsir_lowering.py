@@ -261,15 +261,40 @@ def classify_tlc_result(
             detail=f"TLC violated invariant {generated_id}",
         )
 
-    if (
-        "Temporal properties were violated" in output
-        or "Temporal property is violated" in output
-    ):
-        if returncode != 12:
+    temporal_matches = re.findall(
+        r"^Error: Temporal propert(?:y is|ies were) violated\.$",
+        output,
+        flags=re.MULTILINE,
+    )
+    if temporal_matches:
+        if returncode != 13:
             return TlcClassification(
                 kind="infrastructure_failure",
                 returncode=returncode,
                 detail="temporal-violation text arrived with a non-violation exit code",
+            )
+        if len(temporal_matches) != 1:
+            return TlcClassification(
+                kind="infrastructure_failure",
+                returncode=returncode,
+                detail="TLC reported an ambiguous temporal-violation set",
+            )
+        if not re.search(
+            r"^Error: The following behavior constitutes a counter-example:$",
+            output,
+            flags=re.MULTILINE,
+        ):
+            return TlcClassification(
+                kind="infrastructure_failure",
+                returncode=returncode,
+                detail="temporal violation has no TLC counterexample",
+            )
+        error_lines = re.findall(r"^Error: .+$", output, flags=re.MULTILINE)
+        if len(error_lines) != 2:
+            return TlcClassification(
+                kind="infrastructure_failure",
+                returncode=returncode,
+                detail="temporal violation arrived with contradictory TLC errors",
             )
         temporal_ids = sorted(
             str(entry["fsir_property_id"])
