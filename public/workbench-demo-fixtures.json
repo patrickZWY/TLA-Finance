@@ -1,0 +1,125 @@
+{
+  "version": "phase-3c-v1",
+  "fixtures": {
+    "hero_unsafe": {
+      "safe_to_execute": false,
+      "decision": "unsafe",
+      "normalized_actions": {
+        "actions": [
+          {"action": "buy", "amount": 300, "from": "brokerage", "to": "brokerage", "asset": "VTI"},
+          {"action": "transfer", "amount": 300, "from": "checking", "to": "brokerage"}
+        ]
+      },
+      "python_policy_findings": [
+        {
+          "code": "negative_source_balance",
+          "severity": "error",
+          "message": "Action 1 would reduce brokerage from $0 to -$300.",
+          "action_index": 1
+        }
+      ],
+      "all_findings": [
+        {
+          "code": "negative_source_balance",
+          "severity": "error",
+          "message": "Action 1 would reduce brokerage from $0 to -$300.",
+          "action_index": 1
+        }
+      ],
+      "pluscal": {"status": "passed", "returncode": 0},
+      "tlc": {"status": "failed", "returncode": 12},
+      "artifacts": {"generated": true},
+      "transformer_usage": {"fixture": true},
+      "observability": {"status": "fixture_replay"},
+      "violation_visualization": {
+        "journey": {
+          "first_violating_state": 1,
+          "counterexample_path": [0, 1],
+          "nodes": [
+            {
+              "state_number": 0,
+              "action_index": 0,
+              "kind": "initial",
+              "action": null,
+              "balances": {"checking": 300, "brokerage": 0},
+              "total_outflow": 0,
+              "budget": 600,
+              "violations": []
+            },
+            {
+              "state_number": 1,
+              "action_index": 1,
+              "kind": "action",
+              "action": {"action": "buy", "amount": 300, "from": "brokerage", "to": "brokerage", "asset": "VTI"},
+              "balances": {"checking": 300, "brokerage": -300},
+              "total_outflow": 300,
+              "budget": 600,
+              "violations": [
+                {
+                  "code": "negative_source_balance",
+                  "message": "Brokerage would fall below $0."
+                }
+              ]
+            }
+          ]
+        },
+        "choices": [],
+        "tlc_graph": {
+          "status": "unavailable",
+          "message": "The deterministic demo fixture includes the normalized counterexample but not a full DOT graph."
+        }
+      },
+      "report": {"fixture": true}
+    },
+    "hero_safe": {
+      "safe_to_execute": true,
+      "decision": "safe",
+      "normalized_actions": {
+        "actions": [
+          {"action": "transfer", "amount": 300, "from": "checking", "to": "brokerage"},
+          {"action": "buy", "amount": 300, "from": "brokerage", "to": "brokerage", "asset": "VTI"}
+        ]
+      },
+      "python_policy_findings": [],
+      "all_findings": [],
+      "pluscal": {"status": "passed", "returncode": 0},
+      "tlc": {"status": "passed", "returncode": 0},
+      "artifacts": {"generated": true},
+      "transformer_usage": {"fixture": true},
+      "observability": {"status": "fixture_replay"},
+      "violation_visualization": {
+        "journey": null,
+        "choices": [],
+        "tlc_graph": {
+          "status": "unavailable",
+          "message": "The deterministic demo fixture records a passing result without a full DOT graph."
+        }
+      },
+      "report": {"fixture": true}
+    },
+    "hero_clarification": {
+      "safe_to_execute": false,
+      "decision": "extraction_failed",
+      "extraction_error": {
+        "message": "Required action fields are missing: amount, from, to.",
+        "raw_model_output": "{\"action\":\"transfer\"}"
+      },
+      "normalized_actions": {"actions": []},
+      "python_policy_findings": [],
+      "all_findings": [
+        {
+          "code": "semantic_action_extraction_failed",
+          "severity": "error",
+          "message": "The plan is missing an amount, source account, and destination account."
+        }
+      ],
+      "pluscal": {"status": "skipped"},
+      "tlc": {"status": "skipped"},
+      "artifacts": {},
+      "transformer_usage": {"fixture": true},
+      "observability": {"status": "fixture_replay"},
+      "violation_visualization": null,
+      "report": null
+    }
+  }
+}

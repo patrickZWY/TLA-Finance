@@ -1,0 +1,55 @@
+TLC2 Version 2.19 of 08 August 2024 (rev: 5a47802)
+Running breadth-first search Model-Checking [deterministic runtime metadata elided].
+Parsing file Phase4aSubmittedIsSettled.tla
+Parsing file Integers.tla
+Parsing file FiniteSets.tla
+Parsing file Sequences.tla
+Parsing file Naturals.tla
+Semantic processing of module Naturals
+Semantic processing of module Integers
+Semantic processing of module Sequences
+Semantic processing of module FiniteSets
+Semantic processing of module Phase4aSubmittedIsSettled
+Starting... <timestamp>
+Implied-temporal checking--satisfiability problem has 2 branches.
+Computing initial states...
+Finished computing initial states: 1 distinct state generated at <timestamp>.
+Error: Invariant Prop_property_safe_transfer_then_buy_order_sensitive_no_negative_cash_3fdd966b is violated.
+Error: The behavior up to this point is:
+State 1: <Initial predicate>
+/\ lastEvent = "init"
+/\ State_state_cash_savings_548e3bb7 = 100
+/\ done = {}
+/\ State_state_position_brokerage_vti_f0670753 = 0
+/\ selectedBranch = "fixed"
+/\ State_state_cash_checking_1c212abd = 600
+/\ State_state_buy_status_a9cb3a91 = "not_submitted"
+/\ State_state_transfer_status_5ad17816 = "not_submitted"
+/\ State_state_cash_brokerage_d2161d34 = 0
+
+State 2: <Act_event_buy_submit_762f7978 line 56, col 3 to line 62, col 29 of module Phase4aSubmittedIsSettled>
+/\ lastEvent = "event.buy.submit"
+/\ State_state_cash_savings_548e3bb7 = 100
+/\ done = {"event.buy.submit"}
+/\ State_state_position_brokerage_vti_f0670753 = 0
+/\ selectedBranch = "fixed"
+/\ State_state_cash_checking_1c212abd = 600
+/\ State_state_buy_status_a9cb3a91 = "submitted"
+/\ State_state_transfer_status_5ad17816 = "not_submitted"
+/\ State_state_cash_brokerage_d2161d34 = 0
+
+State 3: <Act_event_buy_execute_4deb6ea8 line 66, col 3 to line 74, col 29 of module Phase4aSubmittedIsSettled>
+/\ lastEvent = "event.buy.execute"
+/\ State_state_cash_savings_548e3bb7 = 100
+/\ done = {"event.buy.submit", "event.buy.execute"}
+/\ State_state_position_brokerage_vti_f0670753 = 300
+/\ selectedBranch = "fixed"
+/\ State_state_cash_checking_1c212abd = 600
+/\ State_state_buy_status_a9cb3a91 = "submitted"
+/\ State_state_transfer_status_5ad17816 = "not_submitted"
+/\ State_state_cash_brokerage_d2161d34 = -300
+
+7 states generated, 7 distinct states found, 3 states left on queue.
+The depth of the complete state graph search is 3.
+The average outdegree of the complete state graph is 2 (minimum is 2, the maximum 2 and the 95th percentile is 2).
+Finished in <duration> at <timestamp>

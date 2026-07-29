@@ -1,0 +1,15 @@
+{
+  "corpus_version": "phase3b-corpus-0.2.1",
+  "approved_lowering_commit": "d45efd09ffe5c77b89fcad1954d7959e54b7b8f3",
+  "source_archive": "phase3b-corpus-v0.2.1.tar.gz",
+  "source_archive_sha256": "bf3a8b16d8a876108799dcf784331f493121570d98b4b1b3b5ec08a09925188f",
+  "corpus_sha256": "0467b64d0148d06ed103353f4c91dc2b76ce4b45ac5b6c13412d1c8e8181c7ce",
+  "evidence_identities_sha256": "ea1eb4a946d139e3335a9d31ab2157e4574a1c5622908a4d185970d80dc92868",
+  "included_subset": [
+    "corpus.json",
+    "evidence-identities.json",
+    "backend-artifacts/ordered",
+    "backend-artifacts/concurrent"
+  ],
+  "scope": "Approved corpus plus the two standalone canonical lifecycle fixtures required by the bounded workbench. Backend files are copied byte-for-byte from the approved archive. The separately hash-pinned evidence identity manifest binds each case and fixture to its exact module, semantic outcome, hashes, trace IDs, and complete artifact inventory before runtime labeling."
+}

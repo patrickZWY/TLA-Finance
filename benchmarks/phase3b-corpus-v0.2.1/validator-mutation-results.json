@@ -1,0 +1,30 @@
+{
+  "schema_version": "phase3b-validator-mutations-0.2.1",
+  "verdict": "pass",
+  "mutations": [
+    {
+      "id": "missing-semantic-action-map-key",
+      "target": "core.17.lowering_oracle.semantic_action_map.action.buy",
+      "observed": "rejected",
+      "gate": "complete semantic action-map keys"
+    },
+    {
+      "id": "empty-semantic-property-map",
+      "target": "core.17.lowering_oracle.semantic_property_map",
+      "observed": "rejected",
+      "gate": "complete semantic property-map keys"
+    },
+    {
+      "id": "mutated-model-digest",
+      "target": "fixture.phase3a.lifecycle.ordered.expected_manifest.outputs.model",
+      "observed": "rejected",
+      "gate": "exact lowering manifest"
+    },
+    {
+      "id": "mutated-raw-tlc-digest",
+      "target": "fixture.phase3a.lifecycle.ordered.execution_evidence_manifest.artifacts.tlc_output",
+      "observed": "rejected",
+      "gate": "exact execution-evidence manifest"
+    }
+  ]
+}

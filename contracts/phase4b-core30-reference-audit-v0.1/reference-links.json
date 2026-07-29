@@ -1,0 +1,158 @@
+{
+  "schema_version": "core30-reference-links-0.1",
+  "links": [
+    {
+      "schema_version": "core30-reference-link-0.1",
+      "evidence_role": "reference_only",
+      "contract_match": false,
+      "hero": {
+        "case_id": "core.30",
+        "fsir_version": "fsir.core.30.v0",
+        "source_span_ids": [
+          "span.30.transfer",
+          "span.30.buy"
+        ],
+        "property_ids": [
+          "property.no_rejected_action",
+          "property.no_negative_cash"
+        ],
+        "displayed_bounds": {
+          "max_steps": 5,
+          "max_actions": 3,
+          "retry_limit": 0,
+          "time_horizon": 4,
+          "amount_domain": [
+            0,
+            300,
+            600,
+            900
+          ]
+        }
+      },
+      "fixture": {
+        "referenced_case_id": "core.18",
+        "fixture_id": "fixture.phase3a.lifecycle.concurrent",
+        "fsir_document_id": "fsir.safe_transfer_then_buy_order_sensitive",
+        "fsir_canonical_json_sha256": "0bd56bad4473087265d3a474a5a5511c97f9adaa41c387fe1710326c4af95f97",
+        "source_document_sha256": "485eafc80eacc0542aaae296116b80c04d2f0fd151d69f4d5571a7f81445f67b",
+        "policy_snapshot_sha256": "f293e547c2b194716237181e320d12c09c941806b311315b95410f63a69db55b",
+        "lowering_manifest_sha256": "3b3362a95b2bcecd82ff08f321e5d516ccb8b10df00439d382e60698fc4f306b",
+        "execution_evidence_manifest_sha256": "26c2d86f2c7e209a920569ca6e7f4255750562648e7040a304aa7562da44e5c3",
+        "model_sha256": "dbbc7f15b80b5cf974b2a25e1ced5de13d5fdd1718bcd131f22594df51bdb11d",
+        "config_sha256": "15d2ca0918c40660889fc5eb047caa5a6ba74f13be7eb6be883e596dc03724ce",
+        "source_map_sha256": "304c9bff425de7c5fc7cc34ff8b6b94d6f074c931c8a233864f804c4abdc42bb",
+        "bounds": {
+          "max_steps": 6,
+          "max_actions": 6,
+          "max_retries": 0,
+          "time_horizon": 0,
+          "amount_domain": [
+            0,
+            100,
+            300,
+            600
+          ]
+        }
+      },
+      "mismatch_reason_codes": [
+        "source_document_mismatch",
+        "source_span_mismatch",
+        "fsir_document_id_mismatch",
+        "action_granularity_mismatch",
+        "property_contract_mismatch",
+        "bounds_mismatch"
+      ],
+      "fixture_display": {
+        "verdict_scope": "fixture_only",
+        "event_id_scope": "fixture_only",
+        "verdict": "property_violation",
+        "violated_property_id": "property.safe_transfer_then_buy_order_sensitive.no_negative_cash",
+        "event_ids": [
+          "event.buy.submit",
+          "event.buy.execute"
+        ]
+      },
+      "derived_core30": {
+        "evidence_status": "none",
+        "verdict": null,
+        "freshness": null,
+        "approval_eligible": false
+      }
+    },
+    {
+      "schema_version": "core30-reference-link-0.1",
+      "evidence_role": "reference_only",
+      "contract_match": false,
+      "hero": {
+        "case_id": "core.30",
+        "fsir_version": "fsir.core.30.v1",
+        "source_span_ids": [
+          "span.30.transfer",
+          "span.30.buy"
+        ],
+        "property_ids": [
+          "property.no_rejected_action",
+          "property.no_negative_cash"
+        ],
+        "displayed_bounds": {
+          "max_steps": 5,
+          "max_actions": 3,
+          "retry_limit": 0,
+          "time_horizon": 4,
+          "amount_domain": [
+            0,
+            300,
+            600,
+            900
+          ]
+        }
+      },
+      "fixture": {
+        "referenced_case_id": "core.17",
+        "fixture_id": "fixture.phase3a.lifecycle.ordered",
+        "fsir_document_id": "fsir.safe_transfer_then_buy_order_sensitive",
+        "fsir_canonical_json_sha256": "c9a5838672199b11a9810a7dc5ad9a9c16aa52889f22aacbb712f8b11cfc28b1",
+        "source_document_sha256": "485eafc80eacc0542aaae296116b80c04d2f0fd151d69f4d5571a7f81445f67b",
+        "policy_snapshot_sha256": "f293e547c2b194716237181e320d12c09c941806b311315b95410f63a69db55b",
+        "lowering_manifest_sha256": "9ff38bb677455449eba2b517a19c6248ba5b56a77b960ee15e29bff30f13124b",
+        "execution_evidence_manifest_sha256": "0137bae092816c61ef37e2eb2dded380474f12dca03968fcfe3570976875d82b",
+        "model_sha256": "50836489a453ea2520cf5207e6e6f24dead291f13e6cb2f6ad2651169e7cf70c",
+        "config_sha256": "15d2ca0918c40660889fc5eb047caa5a6ba74f13be7eb6be883e596dc03724ce",
+        "source_map_sha256": "2e5cc55658015568d53806c9c7e23a11fae60f85b6ca166e127a821604fd367d",
+        "bounds": {
+          "max_steps": 6,
+          "max_actions": 6,
+          "max_retries": 0,
+          "time_horizon": 0,
+          "amount_domain": [
+            0,
+            100,
+            300,
+            600
+          ]
+        }
+      },
+      "mismatch_reason_codes": [
+        "source_document_mismatch",
+        "source_span_mismatch",
+        "fsir_document_id_mismatch",
+        "action_granularity_mismatch",
+        "property_contract_mismatch",
+        "bounds_mismatch"
+      ],
+      "fixture_display": {
+        "verdict_scope": "fixture_only",
+        "event_id_scope": "fixture_only",
+        "verdict": "passed",
+        "violated_property_id": null,
+        "event_ids": []
+      },
+      "derived_core30": {
+        "evidence_status": "none",
+        "verdict": null,
+        "freshness": null,
+        "approval_eligible": false
+      }
+    }
+  ]
+}

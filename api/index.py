@@ -9,7 +9,7 @@ from dataclasses import replace
 from datetime import datetime, timezone
 from math import ceil
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 # Make the agents package importable for local runs.
 _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -26,7 +26,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 load_dotenv()
 
@@ -50,6 +50,11 @@ from safety.transformer import (
     OpenAIActionTransformer,
 )
 from safety.agent import TlaSafetyAgent
+from safety.bounded_workbench import (
+    BoundedEvidenceUnavailable,
+    canonical_fsir_response,
+    corpus_case_response,
+)
 from safety.validator import SafetyFinding, evaluate_policy
 
 normalize_openai_api_key()
@@ -58,6 +63,7 @@ observability.configure_logging()
 logger = logging.getLogger(__name__)
 
 DEFAULT_RATE_LIMITS: Dict[str, tuple[int, int]] = {
+    "/api/bounded-workbench": (20, 60),
     "/api/semantic-check": (10, 60),
     "/api/chat": (5, 60),
     "/api/demo/bad-suggestion": (20, 60),
@@ -69,6 +75,7 @@ DEFAULT_REQUEST_LIMITS = {
     "history_items": 40,
     "history_json_bytes": 32_000,
     "policy_json_bytes": 32_000,
+    "fsir_json_bytes": 256_000,
     "session_json_bytes": 64_000,
 }
 
@@ -329,6 +336,17 @@ class SemanticCheckRequest(BaseModel):
     run_model_checker: Optional[bool] = None
 
 
+class BoundedWorkbenchRequest(BaseModel):
+    source: Literal["corpus_case", "canonical_fsir"]
+    case_id: Optional[str] = None
+    hero_stage: Optional[int] = Field(default=None, ge=1, le=8)
+    fsir: Optional[Dict[str, Any]] = None
+    run_model_checker: bool = False
+
+    class Config:
+        extra = "forbid"
+
+
 @app.post("/api/chat")
 def chat(req: ChatRequest):
     request_id = observability.new_id("req")
@@ -404,6 +422,71 @@ def semantic_check(req: SemanticCheckRequest):
                 duration_ms=observability.elapsed_ms(start),
             )
             raise HTTPException(status_code=500, detail=f"Semantic check failed: {exc}") from exc
+
+
+@app.post("/api/bounded-workbench")
+def bounded_workbench(req: BoundedWorkbenchRequest):
+    """Run the closed FSIR path without widening legacy prose extraction."""
+
+    if req.source == "corpus_case":
+        if not req.case_id or req.fsir is not None:
+            raise HTTPException(
+                status_code=422,
+                detail="corpus_case requires case_id and forbids fsir",
+            )
+        try:
+            return corpus_case_response(req.case_id, req.hero_stage)
+        except KeyError as exc:
+            raise HTTPException(
+                status_code=404,
+                detail="unknown frozen corpus case",
+            ) from exc
+        except BoundedEvidenceUnavailable as exc:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "bounded_evidence_unavailable",
+                    "message": (
+                        "Frozen case evidence failed integrity validation."
+                    ),
+                },
+            ) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    if req.fsir is None or req.case_id is not None or req.hero_stage is not None:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "canonical_fsir requires fsir and forbids case_id/hero_stage"
+            ),
+        )
+    _validate_json_size(
+        "fsir",
+        req.fsir,
+        request_limits()["fsir_json_bytes"],
+    )
+    try:
+        return canonical_fsir_response(
+            req.fsir,
+            run_model_checker=req.run_model_checker,
+        )
+    except ValidationError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "code": "invalid_fsir",
+                "message": "FSIR validation failed; no lowering was attempted.",
+                "errors": [
+                    {
+                        "loc": list(item["loc"]),
+                        "type": item["type"],
+                        "msg": item["msg"],
+                    }
+                    for item in exc.errors(include_url=False)
+                ],
+            },
+        ) from exc
 
 
 @app.post("/api/demo/bad-suggestion")
