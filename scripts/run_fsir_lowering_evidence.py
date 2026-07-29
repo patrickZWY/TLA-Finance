@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+import hashlib
 import json
 import subprocess
 from dataclasses import replace
@@ -13,8 +14,11 @@ from pathlib import Path
 from safety.fsir import FsirDocument
 from safety.fsir_lowering import (
     UnsupportedFsirError,
+    build_execution_evidence_manifest,
+    classify_tlc_result,
     lower_fsir,
     normalize_tlc_counterexample,
+    verify_execution_evidence,
     verify_lowered_fsir,
     write_lowered_fsir,
 )
@@ -60,10 +64,20 @@ def main():
     output.mkdir(parents=True, exist_ok=True)
 
     cases = {}
+    lowered_by_mode = {}
+    execution_records = {}
     all_ok = True
-    for mode, control, expected in (
-        ("ordered", "sequence", "passed"),
-        ("concurrent", "partial_order", "failed"),
+    for mode, control, expected, expected_property_ids in (
+        ("ordered", "sequence", "passed", []),
+        (
+            "concurrent",
+            "partial_order",
+            "property_violation",
+            [
+                "property.safe_transfer_then_buy_order_sensitive."
+                "no_negative_cash"
+            ],
+        ),
     ):
         document = lifecycle_document(control)
         lowered = lower_fsir(
@@ -71,6 +85,7 @@ def main():
             f"FsirLifecycle{mode.title()}",
             tla_tools_jar=jar,
         )
+        lowered_by_mode[mode] = lowered
         artifact_dir = output / mode
         write_lowered_fsir(lowered, artifact_dir)
         (artifact_dir / "input.fsir.json").write_text(
@@ -87,25 +102,88 @@ def main():
         (artifact_dir / "tlc-output.txt").write_text(
             tlc_output, encoding="utf-8"
         )
-        trace = normalize_tlc_counterexample(tlc_output, lowered.source_map)
+        classification = classify_tlc_result(
+            completed.returncode,
+            tlc_output,
+            lowered.source_map,
+        )
+        trace = (
+            normalize_tlc_counterexample(tlc_output, lowered.source_map)
+            if classification.kind
+            in {"property_violation", "temporal_violation"}
+            else []
+        )
         (artifact_dir / "normalized-trace.json").write_text(
             canonical_json(trace), encoding="utf-8"
         )
-        observed = (
-            "passed"
-            if completed.returncode == 0
-            and "No error has been found" in tlc_output
-            else "failed"
+        (artifact_dir / "classification.json").write_text(
+            canonical_json(classification.to_json()), encoding="utf-8"
         )
-        all_ok = all_ok and observed == expected
+        satisfied = (
+            classification.kind == expected
+            and list(classification.violated_property_ids)
+            == expected_property_ids
+            and (
+                classification.kind == "passed"
+                or bool(trace)
+            )
+        )
+        execution_report = {
+            "schema_version": "fsir-tla-execution-report-0.1",
+            "module_name": lowered.module_name,
+            "expected_classification": expected,
+            "expected_property_ids": expected_property_ids,
+            "observed_classification": classification.kind,
+            "observed_property_ids": list(
+                classification.violated_property_ids
+            ),
+            "normalized_trace_steps": len(trace),
+            "satisfied": satisfied,
+        }
+        (artifact_dir / "execution-report.json").write_text(
+            canonical_json(execution_report), encoding="utf-8"
+        )
+        execution_manifest = build_execution_evidence_manifest(
+            lowered=lowered,
+            tlc_output=tlc_output,
+            normalized_trace=trace,
+            classification=classification,
+            execution_report=execution_report,
+        )
+        verify_execution_evidence(
+            lowered=lowered,
+            tlc_output=tlc_output,
+            normalized_trace=trace,
+            classification=classification,
+            execution_report=execution_report,
+            execution_manifest=execution_manifest,
+        )
+        (artifact_dir / "execution-evidence-manifest.json").write_text(
+            canonical_json(execution_manifest), encoding="utf-8"
+        )
+        execution_records[mode] = {
+            "lowered": lowered,
+            "tlc_output": tlc_output,
+            "normalized_trace": trace,
+            "classification": classification,
+            "execution_report": execution_report,
+            "execution_manifest": execution_manifest,
+        }
+        all_ok = all_ok and satisfied
         cases[mode] = {
             "control_kind": control,
             "expected": expected,
-            "observed": observed,
+            "expected_property_ids": expected_property_ids,
+            "observed": classification.kind,
+            "observed_property_ids": list(
+                classification.violated_property_ids
+            ),
             "returncode": completed.returncode,
             "manifest": lowered.manifest,
+            "execution_evidence_manifest": execution_manifest,
             "normalized_trace_steps": len(trace),
             "normalized_event_ids": [item["event_id"] for item in trace],
+            "satisfied": satisfied,
         }
 
     document = lifecycle_document("sequence")
@@ -133,6 +211,37 @@ def main():
         ),
     }
     mutation_results = {}
+    infrastructure_classification = classify_tlc_result(
+        150,
+        "Error: Cannot find source file for module MissingConcurrentModule.",
+        lowered_by_mode["concurrent"].source_map,
+    )
+    infrastructure_rejected = (
+        infrastructure_classification.kind == "infrastructure_failure"
+    )
+    mutation_results["infrastructure_not_property_violation"] = {
+        "rejected": infrastructure_rejected,
+        "classification": infrastructure_classification.to_json(),
+    }
+    all_ok = all_ok and infrastructure_rejected
+    concurrent_record = execution_records["concurrent"]
+    try:
+        verify_execution_evidence(
+            **{
+                **concurrent_record,
+                "tlc_output": concurrent_record["tlc_output"] + "\nmutated",
+            }
+        )
+    except ValueError as error:
+        mutation_results["execution_output_integrity"] = {
+            "rejected": True,
+            "error": str(error),
+        }
+    else:
+        mutation_results["execution_output_integrity"] = {
+            "rejected": False
+        }
+        all_ok = False
     for name, mutant in mutants.items():
         try:
             verify_lowered_fsir(
@@ -223,6 +332,26 @@ def main():
     }
     (output / "report.json").write_text(
         canonical_json(report), encoding="utf-8"
+    )
+    suite_payloads = {
+        "report": canonical_json(report),
+        **{
+            f"{mode}_execution_manifest": canonical_json(
+                record["execution_manifest"]
+            )
+            for mode, record in execution_records.items()
+        },
+    }
+    suite_manifest = {
+        "schema_version": "fsir-tla-evidence-suite-0.1",
+        "hash_algorithm": "sha256",
+        "artifacts": {
+            name: hashlib.sha256(payload.encode("utf-8")).hexdigest()
+            for name, payload in suite_payloads.items()
+        },
+    }
+    (output / "suite-evidence-manifest.json").write_text(
+        canonical_json(suite_manifest), encoding="utf-8"
     )
     print(json.dumps(report, indent=2, sort_keys=True))
     raise SystemExit(0 if all_ok else 1)

@@ -14,7 +14,7 @@ artifact is emitted.
 - fixed sequences, mutually exclusive plans, and bounded partial orders;
 - state/action constraints, invariants, precedence traces, and eventual
   liveness properties;
-- weak and strong action fairness assumptions.
+- weak and strong action fairness assumptions without attached formulas.
 
 The partial-order form is the concurrency primitive for the transfer-settlement
 slice. Actions execute at most once. Control edges are prerequisites, while
@@ -27,16 +27,20 @@ or asset state; this prevents lifecycle expansion from bypassing the canonical
 finance policy.
 
 The lowerer rejects blocking unresolved items, ambiguous or parallel control,
-retry/time-horizon semantics, temporal expressions in guards or updates,
-duplicate update targets, and any expression outside the closed FSIR AST.
-This boundary is intentional; it is not a general TLA+ compiler.
+retry/time-horizon semantics, unsupported assumption kinds, formulas attached
+to fairness assumptions, temporal expressions in guards or updates, duplicate
+update targets, action/outcome event-ID collisions, and any expression outside
+the closed FSIR AST. This boundary is intentional; it is not a general TLA+
+compiler.
 
 ## Stable identity and evidence
 
 Generated state, action/outcome, and property identifiers combine a readable
 FSIR-derived slug with the first eight hexadecimal characters of the SHA-256 of
 the complete stable FSIR ID. Branch tokens use a 12-character digest. The
-source map retains the exact FSIR IDs and source-span IDs.
+source map retains the exact FSIR IDs and source-span IDs. Emitted fairness
+clauses are named by stable assumption operators and mapped to their FSIR
+assumption IDs, action IDs, kinds, and provenance spans.
 
 The manifest records SHA-256 values for:
 
@@ -58,7 +62,20 @@ maps TLC state blocks back to a sequence of:
 }
 ```
 
-Only observable FSIR state is included.
+Only observable FSIR state is included. Normalization rejects duplicate or
+unknown event mappings, repeated one-shot events, missing `lastEvent`, and
+missing observable values.
+
+TLC results are classified as exactly `passed`, `property_violation`,
+`temporal_violation`, or `infrastructure_failure`. A recognized violation must
+use TLC's violation exit code and map to a known generated property; the
+evidence runner additionally requires the expected property ID and a nonempty
+strict trace. A module, parser, config, or tool error cannot satisfy an
+expected-unsafe oracle.
+
+Each run writes an execution-evidence manifest that SHA-256 binds the lowering
+manifest, raw TLC output, normalized trace, exact classification, and per-case
+execution report. `verify_execution_evidence` rejects drift in any artifact.
 
 ## Reproduce the TLC evidence
 
@@ -72,8 +89,9 @@ From the repository root:
 
 The ordered lifecycle must pass. The partial-order lifecycle deliberately lets
 the buy execute before transfer settlement and must produce an invariant
-counterexample. The report also requires model, config, source-map, and
-manifest mutations to be rejected.
+counterexample bound to the expected property and a nonempty strict trace. The
+report also requires infrastructure failure to remain distinct and model,
+config, source-map, property, policy, and manifest mutations to be rejected.
 
 This milestone does not claim support for arbitrary FSIR constructs, unbounded
 models, refinement proofs, or proof evidence beyond the emitted bounded TLC

@@ -12,7 +12,7 @@ import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, Literal
 
 import safety.fsir as fsir_contract
 from safety.fsir import (
@@ -29,6 +29,7 @@ from safety.fsir import (
 LOWERER_VERSION = "fsir-tla-lowerer-0.1"
 SOURCE_MAP_VERSION = "fsir-tla-source-map-0.1"
 MANIFEST_VERSION = "fsir-tla-manifest-0.1"
+EXECUTION_MANIFEST_VERSION = "fsir-tla-execution-evidence-0.1"
 
 
 class UnsupportedFsirError(ValueError):
@@ -42,6 +43,30 @@ class LoweredFsir:
     cfg_text: str
     source_map: dict[str, Any]
     manifest: dict[str, Any]
+
+
+TlcClassificationKind = Literal[
+    "passed",
+    "property_violation",
+    "temporal_violation",
+    "infrastructure_failure",
+]
+
+
+@dataclass(frozen=True)
+class TlcClassification:
+    kind: TlcClassificationKind
+    returncode: int
+    violated_property_ids: tuple[str, ...] = ()
+    detail: str = ""
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "kind": self.kind,
+            "returncode": self.returncode,
+            "violated_property_ids": list(self.violated_property_ids),
+            "detail": self.detail,
+        }
 
 
 def lower_fsir(
@@ -71,6 +96,10 @@ def lower_fsir(
         prop.id: _stable_name("Prop", prop.id)
         for prop in document.properties
     }
+    assumption_names = {
+        assumption.id: _stable_name("Assume", assumption.id)
+        for assumption in document.assumptions
+    }
     branch_names = {
         branch.id: _stable_token("branch", branch.id)
         for branch in document.control.branches
@@ -85,6 +114,9 @@ def lower_fsir(
         list(property_names.values()), "property operator"
     )
     _require_unique_generated_names(
+        list(assumption_names.values()), "assumption operator"
+    )
+    _require_unique_generated_names(
         list(branch_names.values()), "branch token"
     )
     input_payload = _canonical_json(dump_fsir(document))
@@ -95,6 +127,7 @@ def lower_fsir(
         state_names,
         action_names,
         property_names,
+        assumption_names,
         branch_names,
     )
     source_map_text = _canonical_json(source_map) + "\n"
@@ -104,6 +137,7 @@ def lower_fsir(
         state_names,
         action_names,
         property_names,
+        assumption_names,
         branch_names,
     )
     cfg_text = _render_cfg(document, property_names)
@@ -173,6 +207,147 @@ def verify_lowered_fsir(
         )
 
 
+def classify_tlc_result(
+    returncode: int,
+    output: str,
+    source_map: dict[str, Any],
+) -> TlcClassification:
+    """Classify TLC evidence without conflating a tool failure and a violation."""
+
+    if returncode == 0 and "No error has been found" in output:
+        return TlcClassification(
+            kind="passed",
+            returncode=returncode,
+            detail="TLC completed with no reported error",
+        )
+
+    property_map = source_map.get("properties")
+    if not isinstance(property_map, dict):
+        return TlcClassification(
+            kind="infrastructure_failure",
+            returncode=returncode,
+            detail="source map has no property mapping",
+        )
+    invariant_matches = re.findall(
+        r"^Error: Invariant ([A-Za-z][A-Za-z0-9_]*) is violated\.$",
+        output,
+        flags=re.MULTILINE,
+    )
+    if invariant_matches:
+        if returncode != 12:
+            return TlcClassification(
+                kind="infrastructure_failure",
+                returncode=returncode,
+                detail="invariant text arrived with a non-violation exit code",
+            )
+        if len(invariant_matches) != 1:
+            return TlcClassification(
+                kind="infrastructure_failure",
+                returncode=returncode,
+                detail="TLC reported an ambiguous invariant set",
+            )
+        generated_id = invariant_matches[0]
+        entry = property_map.get(generated_id)
+        if not isinstance(entry, dict) or not entry.get("fsir_property_id"):
+            return TlcClassification(
+                kind="infrastructure_failure",
+                returncode=returncode,
+                detail=f"violated invariant {generated_id} is absent from source map",
+            )
+        return TlcClassification(
+            kind="property_violation",
+            returncode=returncode,
+            violated_property_ids=(str(entry["fsir_property_id"]),),
+            detail=f"TLC violated invariant {generated_id}",
+        )
+
+    if (
+        "Temporal properties were violated" in output
+        or "Temporal property is violated" in output
+    ):
+        if returncode != 12:
+            return TlcClassification(
+                kind="infrastructure_failure",
+                returncode=returncode,
+                detail="temporal-violation text arrived with a non-violation exit code",
+            )
+        temporal_ids = sorted(
+            str(entry["fsir_property_id"])
+            for entry in property_map.values()
+            if isinstance(entry, dict)
+            and entry.get("kind") == "liveness"
+            and entry.get("fsir_property_id")
+        )
+        if len(temporal_ids) == 1:
+            return TlcClassification(
+                kind="temporal_violation",
+                returncode=returncode,
+                violated_property_ids=(temporal_ids[0],),
+                detail="TLC reported the sole configured temporal property",
+            )
+        return TlcClassification(
+            kind="infrastructure_failure",
+            returncode=returncode,
+            detail="temporal violation cannot be bound to exactly one property",
+        )
+
+    return TlcClassification(
+        kind="infrastructure_failure",
+        returncode=returncode,
+        detail="TLC did not report a recognized bound property violation",
+    )
+
+
+def build_execution_evidence_manifest(
+    *,
+    lowered: LoweredFsir,
+    tlc_output: str,
+    normalized_trace: list[dict[str, Any]],
+    classification: TlcClassification,
+    execution_report: dict[str, Any],
+) -> dict[str, Any]:
+    """Integrity-bind lowering, raw execution, trace, classification, and report."""
+
+    payloads = {
+        "lowering_manifest": _canonical_json(lowered.manifest) + "\n",
+        "tlc_output": tlc_output,
+        "normalized_trace": _canonical_json(normalized_trace) + "\n",
+        "classification": _canonical_json(classification.to_json()) + "\n",
+        "execution_report": _canonical_json(execution_report) + "\n",
+    }
+    return {
+        "schema_version": EXECUTION_MANIFEST_VERSION,
+        "module_name": lowered.module_name,
+        "hash_algorithm": "sha256",
+        "artifacts": {
+            name: hashlib.sha256(value.encode("utf-8")).hexdigest()
+            for name, value in payloads.items()
+        },
+    }
+
+
+def verify_execution_evidence(
+    *,
+    lowered: LoweredFsir,
+    tlc_output: str,
+    normalized_trace: list[dict[str, Any]],
+    classification: TlcClassification,
+    execution_report: dict[str, Any],
+    execution_manifest: dict[str, Any],
+) -> None:
+    """Reject drift in any execution-evidence artifact."""
+
+    expected = build_execution_evidence_manifest(
+        lowered=lowered,
+        tlc_output=tlc_output,
+        normalized_trace=normalized_trace,
+        classification=classification,
+        execution_report=execution_report,
+    )
+    if execution_manifest != expected:
+        raise ValueError("execution evidence fails deterministic integrity")
+
+
 def normalize_tlc_counterexample(
     output: str,
     source_map: dict[str, Any],
@@ -192,20 +367,48 @@ def normalize_tlc_counterexample(
     operator_by_event: dict[str, str] = {}
     for operator_id, entry in source_map["operators"].items():
         event_id = entry.get("fsir_outcome_id") or entry["fsir_action_id"]
+        if event_id in operator_by_event:
+            raise ValueError(
+                f"source map has duplicate event identity {event_id}"
+            )
         operator_by_event[event_id] = operator_id
 
     normalized: list[dict[str, Any]] = []
+    seen_events: set[str] = set()
     for before, after in zip(states, states[1:]):
-        event_id = str(after.get("lastEvent", ""))
-        if not event_id or event_id == "init":
+        if "lastEvent" not in before or "lastEvent" not in after:
+            raise ValueError("TLC trace state is missing lastEvent")
+        if before == after:
             continue
+        event_id = str(after["lastEvent"])
+        if not event_id or event_id == "init":
+            raise ValueError("non-initial TLC transition has no event identity")
+        if event_id not in operator_by_event:
+            raise ValueError(f"TLC trace references unknown event {event_id}")
+        if event_id in seen_events:
+            raise ValueError(f"TLC trace repeats one-shot event {event_id}")
+        seen_events.add(event_id)
+        missing_values = sorted(
+            entry["tla_variable"]
+            for entry in state_map.values()
+            if entry["observable"]
+            and (
+                entry["tla_variable"] not in before
+                or entry["tla_variable"] not in after
+            )
+        )
+        if missing_values:
+            raise ValueError(
+                "TLC trace is missing observable state values: "
+                + ", ".join(missing_values)
+            )
         before_values = {
-            fsir_id: before.get(entry["tla_variable"])
+            fsir_id: before[entry["tla_variable"]]
             for fsir_id, entry in state_map.items()
             if entry["observable"]
         }
         after_values = {
-            fsir_id: after.get(entry["tla_variable"])
+            fsir_id: after[entry["tla_variable"]]
             for fsir_id, entry in state_map.items()
             if entry["observable"]
         }
@@ -213,7 +416,7 @@ def normalize_tlc_counterexample(
             {
                 "step": len(normalized) + 1,
                 "event_id": event_id,
-                "operator_id": operator_by_event.get(event_id),
+                "operator_id": operator_by_event[event_id],
                 "before": before_values,
                 "after": after_values,
             }
@@ -250,6 +453,18 @@ def _validate_supported_subset(document: FsirDocument) -> None:
     policy_action_ids = {
         item.fsir_action_id for item in document.compatibility.id_map
     }
+    action_ids = {action.id for action in document.actions}
+    outcome_ids = {
+        outcome.id
+        for action in document.actions
+        for outcome in action.outcomes
+    }
+    colliding_event_ids = sorted(action_ids & outcome_ids)
+    if colliding_event_ids:
+        raise UnsupportedFsirError(
+            "action and outcome event IDs must be globally unique: "
+            + ", ".join(colliding_event_ids)
+        )
     for variable in document.state:
         if variable.type.kind not in {
             "money",
@@ -317,6 +532,18 @@ def _validate_supported_subset(document: FsirDocument) -> None:
     for prop in document.properties:
         _validate_property_expression(prop.formula, prop.id)
 
+    for assumption in document.assumptions:
+        if assumption.kind not in {"weak_fairness", "strong_fairness"}:
+            raise UnsupportedFsirError(
+                f"unsupported assumption kind {assumption.kind!r} "
+                f"on {assumption.id}"
+            )
+        if assumption.formula is not None:
+            raise UnsupportedFsirError(
+                f"fairness assumption {assumption.id} cannot carry a formula "
+                "in the bounded lowering subset"
+            )
+
 
 def _validate_state_updates(owner_id: str, updates: list[StateUpdate]) -> None:
     targets = [update.target_state_id for update in updates]
@@ -363,6 +590,7 @@ def _render_tla(
     state_names: dict[str, str],
     action_names: dict[tuple[str, str | None], str],
     property_names: dict[str, str],
+    assumption_names: dict[str, str],
     branch_names: dict[str, str],
 ) -> str:
     state_vars = [state_names[item.id] for item in document.state]
@@ -447,7 +675,11 @@ def _render_tla(
         if operator_ids
         else "  FALSE"
     )
-    fairness = _render_fairness(document, action_names)
+    assumption_blocks, fairness = _render_assumptions(
+        document,
+        action_names,
+        assumption_names,
+    )
     sections = [
         f"---- MODULE {module} ----",
         "EXTENDS Integers, FiniteSets, Sequences",
@@ -464,6 +696,8 @@ def _render_tla(
     ]
     if operator_blocks:
         sections.extend(["\n\n".join(operator_blocks), ""])
+    if assumption_blocks:
+        sections.extend(["\n\n".join(assumption_blocks), ""])
     sections.extend(
         [
             "Next ==",
@@ -540,16 +774,17 @@ def _render_action_operator(
     return "\n".join(lines)
 
 
-def _render_fairness(
+def _render_assumptions(
     document: FsirDocument,
     action_names: dict[tuple[str, str | None], str],
-) -> str:
-    clauses: list[str] = []
+    assumption_names: dict[str, str],
+) -> tuple[list[str], str]:
+    blocks: list[str] = []
+    clause_names: list[str] = []
     action_by_id = {action.id: action for action in document.actions}
     for assumption in document.assumptions:
-        if assumption.kind not in {"weak_fairness", "strong_fairness"}:
-            continue
         prefix = "WF_vars" if assumption.kind == "weak_fairness" else "SF_vars"
+        terms: list[str] = []
         for action_id in assumption.action_ids:
             action = action_by_id[action_id]
             if action.kind == "conditional_outcome":
@@ -558,12 +793,17 @@ def _render_fairness(
                     for outcome in action.outcomes
                 ]
                 combined = "(" + " \\/ ".join(names) + ")"
-                clauses.append(f" /\\ {prefix}({combined})")
+                terms.append(f"{prefix}({combined})")
             else:
-                clauses.append(
-                    f" /\\ {prefix}({action_names[(action.id, None)]})"
+                terms.append(
+                    f"{prefix}({action_names[(action.id, None)]})"
                 )
-    return "".join(clauses)
+        assumption_name = assumption_names[assumption.id]
+        blocks.append(
+            f"{assumption_name} == " + " /\\ ".join(terms)
+        )
+        clause_names.append(assumption_name)
+    return blocks, "".join(f" /\\ {name}" for name in clause_names)
 
 
 def _property_expression(
@@ -662,6 +902,7 @@ def _source_map(
     state_names: dict[str, str],
     action_names: dict[tuple[str, str | None], str],
     property_names: dict[str, str],
+    assumption_names: dict[str, str],
     branch_names: dict[str, str],
 ) -> dict[str, Any]:
     operators: dict[str, Any] = {}
@@ -696,10 +937,20 @@ def _source_map(
         "properties": {
             property_names[prop.id]: {
                 "fsir_property_id": prop.id,
+                "kind": prop.kind,
                 "finding_code": prop.finding_code,
                 "source_span_ids": list(prop.source_span_ids),
             }
             for prop in document.properties
+        },
+        "assumptions": {
+            assumption_names[assumption.id]: {
+                "fsir_assumption_id": assumption.id,
+                "kind": assumption.kind,
+                "action_ids": list(assumption.action_ids),
+                "source_span_ids": list(assumption.source_span_ids),
+            }
+            for assumption in document.assumptions
         },
         "branches": {
             branch_names[branch.id]: {
@@ -771,9 +1022,14 @@ def _parse_tlc_states(output: str) -> list[dict[str, Any]]:
     current: dict[str, Any] | None = None
     for line in output.splitlines():
         if re.match(r"^State \d+:", line):
+            prior = current
             if current is not None:
                 states.append(current)
-            current = {}
+            current = (
+                dict(prior)
+                if "Stuttering" in line and prior is not None
+                else {}
+            )
             continue
         if current is None:
             continue

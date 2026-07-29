@@ -9,9 +9,13 @@ from pathlib import Path
 
 from safety.fsir import FsirDocument, legacy_to_fsir
 from safety.fsir_lowering import (
+    TlcClassification,
     UnsupportedFsirError,
+    build_execution_evidence_manifest,
+    classify_tlc_result,
     lower_fsir,
     normalize_tlc_counterexample,
+    verify_execution_evidence,
     verify_lowered_fsir,
     write_lowered_fsir,
 )
@@ -273,6 +277,28 @@ def run_tlc(lowered):
         )
 
 
+def synthetic_trace(lowered, event_id, *, include_observables=True, include_last=True):
+    state_lines = []
+    if include_observables:
+        for entry in lowered.source_map["states"].values():
+            if entry["observable"]:
+                state_lines.append(f'/\\ {entry["tla_variable"]} = 0')
+    first = ['/\\ lastEvent = "init"'] if include_last else []
+    second = [f'/\\ lastEvent = "{event_id}"'] if include_last else []
+    return "\n".join(
+        [
+            "State 1: <Initial predicate>",
+            *first,
+            *state_lines,
+            "",
+            "State 2: <Action>",
+            *second,
+            *state_lines,
+            "",
+        ]
+    )
+
+
 class FsirLoweringTests(unittest.TestCase):
     def test_fixed_sequence_lowering_is_deterministic_and_complete(self):
         document = seed_document("safe_transfer_then_buy_order_sensitive")
@@ -429,20 +455,243 @@ class FsirLoweringTests(unittest.TestCase):
     def test_normalized_counterexample_uses_source_map_ids(self):
         document = seed_document("safe_transfer_then_buy_order_sensitive")
         lowered = lower_fsir(document, "Trace")
-        state_entry = next(iter(lowered.source_map["states"].values()))
-        variable = state_entry["tla_variable"]
         action_id = document.actions[0].id
-        output = (
-            "State 1: <Initial predicate>\n"
-            f'/\\ lastEvent = "init"\n/\\ {variable} = 600\n\n'
-            "State 2: <Action>\n"
-            f'/\\ lastEvent = "{action_id}"\n/\\ {variable} = 300\n'
-        )
+        output = synthetic_trace(lowered, action_id)
         trace = normalize_tlc_counterexample(output, lowered.source_map)
         self.assertEqual(trace[0]["event_id"], action_id)
         self.assertIsNotNone(trace[0]["operator_id"])
-        self.assertEqual(trace[0]["before"][next(iter(lowered.source_map["states"]))], 600)
-        self.assertEqual(trace[0]["after"][next(iter(lowered.source_map["states"]))], 300)
+        self.assertEqual(
+            set(trace[0]["before"]),
+            set(lowered.source_map["states"]),
+        )
+
+    def test_infrastructure_failure_cannot_satisfy_property_violation(self):
+        lowered = lower_fsir(
+            lifecycle_document("partial_order"),
+            "Classification",
+        )
+        classification = classify_tlc_result(
+            150,
+            "Error: Cannot find source file for module MissingModule.",
+            lowered.source_map,
+        )
+        self.assertEqual(classification.kind, "infrastructure_failure")
+        self.assertEqual(classification.violated_property_ids, ())
+
+        temporal_map = copy.deepcopy(lowered.source_map)
+        temporal_map["properties"] = {
+            generated_id: entry
+            for generated_id, entry in temporal_map["properties"].items()
+            if entry["fsir_property_id"]
+            == "property.lifecycle.buy_fills"
+        }
+        temporal = classify_tlc_result(
+            12,
+            "Error: Temporal properties were violated.",
+            temporal_map,
+        )
+        self.assertEqual(temporal.kind, "temporal_violation")
+        self.assertEqual(
+            temporal.violated_property_ids,
+            ("property.lifecycle.buy_fills",),
+        )
+
+    def test_unsupported_assumptions_and_fairness_formulas_fail_closed(self):
+        document = lifecycle_document("sequence")
+        raw = (
+            document.model_dump(by_alias=True, exclude_none=True)
+            if hasattr(document, "model_dump")
+            else document.dict(by_alias=True, exclude_none=True)
+        )
+        environment_raw = copy.deepcopy(raw)
+        environment_raw["assumptions"].append(
+            {
+                "id": "assumption.environment.false",
+                "kind": "environment",
+                "formula": {
+                    "op": "literal",
+                    "value": False,
+                    "value_type": "boolean",
+                },
+                "action_ids": [],
+                "source_span_ids": [
+                    environment_raw["meta"]["source_document_span_id"]
+                ],
+            }
+        )
+        with self.assertRaisesRegex(
+            UnsupportedFsirError, "unsupported assumption kind"
+        ):
+            lower_fsir(FsirDocument(**environment_raw), "Environment")
+
+        fairness_raw = copy.deepcopy(raw)
+        fairness_raw["assumptions"][0]["formula"] = {
+            "op": "literal",
+            "value": True,
+            "value_type": "boolean",
+        }
+        with self.assertRaisesRegex(
+            UnsupportedFsirError, "cannot carry a formula"
+        ):
+            lower_fsir(FsirDocument(**fairness_raw), "FairnessFormula")
+
+    def test_action_and_outcome_event_ids_must_be_globally_unique(self):
+        document = lifecycle_document("sequence")
+        raw = (
+            document.model_dump(by_alias=True, exclude_none=True)
+            if hasattr(document, "model_dump")
+            else document.dict(by_alias=True, exclude_none=True)
+        )
+        action = next(
+            item
+            for item in raw["actions"]
+            if item["id"] == "event.transfer.submit"
+        )
+        original_update = action["updates"][0]
+        action["kind"] = "conditional_outcome"
+        action["updates"] = []
+        action["outcomes"] = [
+            {
+                "id": "event.buy.submit",
+                "guard": {
+                    "op": "literal",
+                    "value": True,
+                    "value_type": "boolean",
+                },
+                "updates": [original_update],
+                "source_span_ids": action["source_span_ids"],
+            },
+            {
+                "id": "outcome.transfer.submit.fallback",
+                "guard": {
+                    "op": "literal",
+                    "value": False,
+                    "value_type": "boolean",
+                },
+                "updates": [original_update],
+                "source_span_ids": action["source_span_ids"],
+            },
+        ]
+        collision = FsirDocument(**raw)
+        with self.assertRaisesRegex(
+            UnsupportedFsirError, "globally unique"
+        ):
+            lower_fsir(collision, "Collision")
+
+    def test_trace_normalization_rejects_unknown_missing_and_duplicate_identity(self):
+        document = lifecycle_document("partial_order")
+        lowered = lower_fsir(document, "StrictTrace")
+        known_event = document.actions[0].id
+
+        with self.assertRaisesRegex(ValueError, "unknown event"):
+            normalize_tlc_counterexample(
+                synthetic_trace(lowered, "event.unknown"),
+                lowered.source_map,
+            )
+        with self.assertRaisesRegex(ValueError, "missing observable"):
+            normalize_tlc_counterexample(
+                synthetic_trace(
+                    lowered,
+                    known_event,
+                    include_observables=False,
+                ),
+                lowered.source_map,
+            )
+        with self.assertRaisesRegex(ValueError, "missing lastEvent"):
+            normalize_tlc_counterexample(
+                synthetic_trace(
+                    lowered,
+                    known_event,
+                    include_last=False,
+                ),
+                lowered.source_map,
+            )
+
+        duplicate_map = copy.deepcopy(lowered.source_map)
+        operator_entries = list(duplicate_map["operators"].values())
+        operator_entries[1]["fsir_action_id"] = operator_entries[0][
+            "fsir_action_id"
+        ]
+        with self.assertRaisesRegex(ValueError, "duplicate event identity"):
+            normalize_tlc_counterexample(
+                synthetic_trace(lowered, known_event),
+                duplicate_map,
+            )
+
+    def test_emitted_fairness_assumption_is_named_and_source_mapped(self):
+        document = lifecycle_document("sequence")
+        lowered = lower_fsir(document, "FairnessMap")
+        assumption = document.assumptions[0]
+        entries = lowered.source_map["assumptions"]
+        self.assertEqual(len(entries), 1)
+        generated_id, entry = next(iter(entries.items()))
+        self.assertEqual(entry["fsir_assumption_id"], assumption.id)
+        self.assertEqual(entry["source_span_ids"], assumption.source_span_ids)
+        self.assertIn(f"{generated_id} ==", lowered.tla_text)
+        self.assertIn(f"/\\ {generated_id}", lowered.tla_text)
+
+    def test_execution_evidence_manifest_binds_every_artifact(self):
+        document = lifecycle_document("partial_order")
+        lowered = lower_fsir(document, "ExecutionIntegrity")
+        output = synthetic_trace(lowered, document.actions[0].id)
+        trace = normalize_tlc_counterexample(output, lowered.source_map)
+        classification = TlcClassification(
+            kind="property_violation",
+            returncode=12,
+            violated_property_ids=(
+                "property.safe_transfer_then_buy_order_sensitive.no_negative_cash",
+            ),
+            detail="synthetic bound violation",
+        )
+        report = {
+            "expected": "property_violation",
+            "observed": "property_violation",
+            "satisfied": True,
+        }
+        manifest = build_execution_evidence_manifest(
+            lowered=lowered,
+            tlc_output=output,
+            normalized_trace=trace,
+            classification=classification,
+            execution_report=report,
+        )
+        verify_execution_evidence(
+            lowered=lowered,
+            tlc_output=output,
+            normalized_trace=trace,
+            classification=classification,
+            execution_report=report,
+            execution_manifest=manifest,
+        )
+        mutations = [
+            {"tlc_output": output + "\nmutated"},
+            {"normalized_trace": []},
+            {
+                "classification": TlcClassification(
+                    kind="infrastructure_failure",
+                    returncode=150,
+                )
+            },
+            {"execution_report": {**report, "satisfied": False}},
+            {
+                "execution_manifest": {
+                    **manifest,
+                    "artifacts": {},
+                }
+            },
+        ]
+        defaults = {
+            "lowered": lowered,
+            "tlc_output": output,
+            "normalized_trace": trace,
+            "classification": classification,
+            "execution_report": report,
+            "execution_manifest": manifest,
+        }
+        for mutation in mutations:
+            with self.subTest(mutation=next(iter(mutation))):
+                with self.assertRaisesRegex(ValueError, "execution evidence"):
+                    verify_execution_evidence(**{**defaults, **mutation})
 
     @unittest.skipUnless(TLA_TOOLS_JAR.is_file(), "tla2tools.jar is unavailable")
     def test_real_tlc_accepts_ordered_lifecycle(self):
@@ -456,6 +705,14 @@ class FsirLoweringTests(unittest.TestCase):
         output = completed.stdout + completed.stderr
         self.assertEqual(completed.returncode, 0, output)
         self.assertIn("No error has been found", output)
+        self.assertEqual(
+            classify_tlc_result(
+                completed.returncode,
+                output,
+                lowered.source_map,
+            ).kind,
+            "passed",
+        )
 
     @unittest.skipUnless(TLA_TOOLS_JAR.is_file(), "tla2tools.jar is unavailable")
     def test_real_tlc_finds_concurrent_lifecycle_counterexample(self):
@@ -469,6 +726,18 @@ class FsirLoweringTests(unittest.TestCase):
         output = completed.stdout + completed.stderr
         self.assertNotEqual(completed.returncode, 0)
         self.assertIn("Invariant", output)
+        classification = classify_tlc_result(
+            completed.returncode,
+            output,
+            lowered.source_map,
+        )
+        self.assertEqual(classification.kind, "property_violation")
+        self.assertEqual(
+            classification.violated_property_ids,
+            (
+                "property.safe_transfer_then_buy_order_sensitive.no_negative_cash",
+            ),
+        )
         trace = normalize_tlc_counterexample(output, lowered.source_map)
         self.assertTrue(trace, output)
         self.assertIn(document.actions[4].id, [step["event_id"] for step in trace])
