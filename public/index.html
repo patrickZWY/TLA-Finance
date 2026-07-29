@@ -7,17 +7,18 @@
   <style>
     *, *::before, *::after { box-sizing: border-box; }
     :root {
-      --bg: #0e1116;
-      --panel: #171b22;
-      --panel2: #202632;
-      --border: #343b49;
-      --text: #edf1f7;
-      --muted: #9aa4b2;
-      --accent: #6ab0ff;
-      --ok: #42c878;
-      --warn: #d7a744;
-      --bad: #ff6961;
-      --code: #0a0d12;
+      color-scheme: light;
+      --bg: #f7faf7;
+      --panel: #ffffff;
+      --panel2: #f1f6f2;
+      --border: #d5e0d8;
+      --text: #15231b;
+      --muted: #5e7065;
+      --accent: #176b4b;
+      --ok: #17734f;
+      --warn: #8a5a00;
+      --bad: #a33131;
+      --code: #142019;
     }
     body {
       margin: 0;
@@ -73,6 +74,11 @@
       outline: none;
     }
     textarea:focus, input:focus, select:focus { border-color: var(--accent); }
+    button:focus-visible, textarea:focus-visible, input:focus-visible, select:focus-visible,
+    summary:focus-visible, [tabindex]:focus-visible {
+      outline: 3px solid #176b4b44;
+      outline-offset: 2px;
+    }
     textarea { resize: vertical; min-height: 92px; line-height: 1.45; }
     .advice { min-height: 176px; }
     .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -161,9 +167,9 @@
     .wide { grid-column: 1 / -1; }
     .error { color: var(--bad); font-size: 13px; min-height: 18px; }
     .disclaimer {
-      border: 1px solid #d7a74455;
-      background: #1e1a12;
-      color: #e9d39a;
+      border: 1px solid #cddbd1;
+      background: #f5f8f5;
+      color: var(--muted);
       border-radius: 6px;
       padding: 8px 10px;
       font-size: 12px;
@@ -204,53 +210,163 @@
     .tlc-node-group { cursor: pointer; }
     .tlc-node-group:hover .tlc-node { stroke: var(--accent); stroke-width: 2.5; }
     .tlc-state-detail { margin: 10px; border: 1px solid var(--border); border-radius: 6px; max-height: 180px; }
+    .intro {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 20px;
+      padding: 10px 4px 2px;
+    }
+    .intro h2 { margin: 0; font-size: clamp(26px, 4vw, 42px); letter-spacing: -.04em; line-height: 1.08; max-width: 760px; }
+    .intro p { color: var(--muted); margin: 9px 0 0; max-width: 760px; }
+    .sandbox-pill { border: 1px solid var(--border); border-radius: 999px; padding: 7px 10px; color: var(--muted); background: var(--panel); font-size: 12px; white-space: nowrap; }
+    .agent-card { grid-column: 1 / -1; overflow: hidden; }
+    .agent-summary { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px; padding: 16px 18px; align-items: center; }
+    .agent-summary strong { display: block; font-size: 14px; }
+    .agent-summary p { color: var(--muted); margin: 4px 0 0; font-size: 13px; }
+    .agent-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .stop-button { border-color: #a3313166; color: var(--bad); background: #fff7f7; }
+    .stage-strip { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid var(--border); }
+    .stage { padding: 11px 14px; display: grid; grid-template-columns: 24px 1fr; gap: 8px; align-items: center; color: var(--muted); font-size: 12px; }
+    .stage + .stage { border-left: 1px solid var(--border); }
+    .stage-dot { width: 22px; height: 22px; display: grid; place-items: center; border: 1px solid var(--border); border-radius: 50%; background: var(--panel); font-size: 12px; font-weight: 750; }
+    .stage.active { color: var(--accent); font-weight: 700; }
+    .stage.active .stage-dot { color: white; border-color: var(--accent); background: var(--accent); }
+    .stage.done .stage-dot { color: var(--accent); border-color: #9fcbb5; background: #e6f4ec; }
+    .verdict-hero { display: none; padding: 18px; border: 1px solid var(--border); border-radius: 9px; background: var(--panel2); }
+    .verdict-hero.visible { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px; align-items: start; }
+    .verdict-label { display: flex; gap: 7px; align-items: center; font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+    .verdict-hero.blocked .verdict-label { color: var(--bad); }
+    .verdict-hero.passed .verdict-label { color: var(--ok); }
+    .verdict-hero.clarify .verdict-label, .verdict-hero.unavailable .verdict-label { color: var(--warn); }
+    .verdict-hero h3 { margin: 6px 0 4px; font-size: clamp(20px, 3vw, 29px); letter-spacing: -.03em; }
+    .verdict-hero p { margin: 0; color: var(--muted); max-width: 760px; }
+    .verdict-meta { display: grid; gap: 5px; min-width: 210px; font: 11px ui-monospace, monospace; color: var(--muted); }
+    .verdict-meta span { display: block; padding: 5px 7px; border: 1px solid var(--border); border-radius: 5px; background: var(--panel); }
+    .fsir-card { grid-column: 1 / -1; }
+    .fsir-meta { padding: 10px 12px; display: flex; gap: 6px; flex-wrap: wrap; border-bottom: 1px solid var(--border); background: var(--panel2); }
+    .fsir-meta .badge { background: var(--panel); }
+    .question-list { display: none; padding: 12px; border-bottom: 1px solid var(--border); background: #fff7e5; color: #66460d; }
+    .question-list.visible { display: block; }
+    .question-list strong { display: block; margin-bottom: 6px; }
+    .question-list ol { margin: 0; padding-left: 20px; }
+    .fsir-list { display: grid; }
+    .fsir-node { padding: 13px 14px; display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; gap: 10px; align-items: start; border-bottom: 1px solid var(--border); }
+    .fsir-node:last-child { border-bottom: 0; }
+    .fsir-index { width: 27px; height: 27px; display: grid; place-items: center; border-radius: 7px; background: var(--panel2); color: var(--muted); font-size: 12px; font-weight: 750; }
+    .fsir-node strong { display: block; font-size: 13px; }
+    .fsir-node .source { margin-top: 4px; color: var(--muted); font-size: 12px; }
+    .fsir-node mark { color: inherit; background: #fff0b8; border-radius: 2px; padding: 0 2px; }
+    .review-controls { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 8px; }
+    .review-controls button { padding: 5px 8px; font-size: 11px; background: var(--panel); }
+    .review-controls button.selected { border-color: #7cb898; color: var(--accent); background: #e5f3ea; }
+    .review-controls button.reject.selected { border-color: #d89a9a; color: var(--bad); background: #fff0f0; }
+    .approval-bar { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 14px; background: var(--panel2); }
+    .approval-copy { color: var(--muted); font-size: 12px; }
+    .approval-copy strong { color: var(--text); }
+    .activity-list { margin: 0; padding: 0; list-style: none; }
+    .activity-item { display: grid; grid-template-columns: 78px 1fr; gap: 10px; padding: 9px 12px; border-bottom: 1px solid var(--border); font-size: 12px; }
+    .activity-item:last-child { border-bottom: 0; }
+    .activity-time { color: var(--muted); font: 11px ui-monospace, monospace; }
+    details.technical { border: 1px solid var(--border); border-radius: 8px; background: var(--panel); }
+    details.technical summary { cursor: pointer; padding: 10px 12px; font-size: 13px; font-weight: 700; }
+    .fixture-toggle { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); font-size: 12px; }
+    .fixture-toggle input { width: auto; }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
     @media (max-width: 980px) {
       main, .result-grid, .grid2, .journey-layout { grid-template-columns: 1fr; }
+      .intro { align-items: start; flex-direction: column; }
+      .verdict-hero.visible { grid-template-columns: 1fr; }
+      .verdict-meta { min-width: 0; }
+    }
+    @media (max-width: 620px) {
+      header { align-items: start; }
+      header .status-row { display: none; }
+      .agent-summary { grid-template-columns: 1fr; }
+      .stage { font-size: 0; }
+      .stage + .stage { border-left: 0; }
+      .fsir-node { grid-template-columns: 30px 1fr; }
+      .fsir-node > .badge { grid-column: 2; justify-self: start; }
+      .approval-bar { align-items: stretch; flex-direction: column; }
+      .approval-bar button { width: 100%; }
+      .activity-item { grid-template-columns: 1fr; gap: 2px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
     }
   </style>
 </head>
 <body>
   <header>
     <div>
-      <h1>Finance Safety Workbench</h1>
-      <div class="subtle">Local LLM semantic extraction -> Python policy mirror -> PlusCal/TLC</div>
+      <h1>TLA-Finance Agent</h1>
+      <div class="subtle">Bounded planning · reviewable FSIR · formal evidence</div>
     </div>
     <div class="status-row">
-      <span class="badge">Model: qwen3:4b</span>
-      <span class="badge">Endpoint: localhost:11434</span>
+      <span class="badge ok">Local verifier ready</span>
     </div>
   </header>
 
   <main>
-    <section>
-      <div class="section-head">
-        <h2>Input</h2>
+    <div class="intro">
+      <div>
+        <h2>Check a financial plan before anyone acts on it.</h2>
+        <p>The agent turns advice into a reviewable specification, asks blocking questions, verifies every modeled step, and requests approval only within explicit bounds.</p>
       </div>
-      <div class="body">
-        <label>
-          Ambiguous demo message
-          <select id="exampleSelect"></select>
-        </label>
-        <label>
-          Optional user context
-          <textarea id="userMessage" placeholder="Example: I want to clean up my cash before the end of the week."></textarea>
-        </label>
-        <label>
-          Finance advice to parse
-          <textarea class="advice" id="financeAdvice" placeholder="Paste ambiguous finance advice here."></textarea>
-        </label>
-        <div class="actions">
-          <button class="primary" id="runBtn" onclick="runSemanticCheck()">Run semantic safety check</button>
-          <label class="toggle"><input type="checkbox" id="runTlc" checked /> Run PlusCal/TLC</label>
+      <span class="sandbox-pill">Educational sandbox · no execution</span>
+    </div>
+
+    <section class="agent-card" aria-labelledby="agentGoalTitle">
+      <div class="agent-summary">
+        <div>
+          <strong id="agentGoalTitle">Agent goal: produce a verified, reviewable plan</strong>
+          <p id="agentStatus" aria-live="polite">Waiting for a goal and proposed plan. The agent will not execute trades or transfers.</p>
         </div>
-        <div class="disclaimer">Sandbox demo only. It does not execute trades or transfers and is not financial advice.</div>
-        <div class="error" id="inputError"></div>
+        <div class="agent-actions">
+          <button type="button" id="revisionBtn" style="display:none;">Propose safer revision</button>
+          <button type="button" id="editGoalBtn">Edit goal</button>
+          <button type="button" class="stop-button" id="stopAgentBtn">Stop agent</button>
+        </div>
+      </div>
+      <div class="stage-strip" aria-label="Agent workflow">
+        <div class="stage active" id="stageDefine"><span class="stage-dot">1</span><span>Define goal and plan</span></div>
+        <div class="stage" id="stageReview"><span class="stage-dot">2</span><span>Review FSIR interpretation</span></div>
+        <div class="stage" id="stageEvidence"><span class="stage-dot">3</span><span>Inspect bounded evidence</span></div>
       </div>
     </section>
 
     <section>
       <div class="section-head">
-        <h2>Security Invariants</h2>
+        <h2>1. Goal and proposed plan</h2>
+      </div>
+      <div class="body">
+        <label>
+          Scenario
+          <select id="exampleSelect"></select>
+        </label>
+        <label>
+          Agent goal and context
+          <textarea id="userMessage" placeholder="Example: I want to clean up my cash before the end of the week."></textarea>
+        </label>
+        <label>
+          Proposed plan to interpret
+          <textarea class="advice" id="financeAdvice" placeholder="Paste ambiguous finance advice here."></textarea>
+        </label>
+        <div class="actions">
+          <button class="primary" id="runBtn" onclick="runSemanticCheck()">Ask agent to review</button>
+          <label class="toggle"><input type="checkbox" id="runTlc" checked /> Run PlusCal/TLC</label>
+          <label class="fixture-toggle"><input type="checkbox" id="fixtureReplay" /> Replay deterministic demo evidence</label>
+        </div>
+        <div class="disclaimer">Sandbox demo only. It does not execute trades or transfers and is not financial advice.</div>
+        <div class="error" id="inputError" role="alert"></div>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <h2>Active guardrails</h2>
         <button onclick="resetPolicy()">Reset policy</button>
       </div>
       <div class="body">
@@ -279,21 +395,50 @@
       </div>
     </section>
 
+    <section class="fsir-card" id="fsirReview" aria-labelledby="fsirTitle">
+      <div class="section-head">
+        <h2 id="fsirTitle">2. Review the Finance Specification IR</h2>
+        <span class="badge" id="fsirStatus">No draft</span>
+      </div>
+      <div class="fsir-meta" id="fsirMeta">
+        <span class="badge">FSIR projection: pending</span>
+        <span class="badge">Approval: required</span>
+      </div>
+      <div class="question-list" id="blockingQuestions" aria-live="polite"></div>
+      <div class="fsir-list" id="fsirList">
+        <div class="empty">Run the agent to produce a source-linked, reviewable interpretation.</div>
+      </div>
+      <div class="approval-bar">
+        <div class="approval-copy" id="approvalCopy"><strong>Approval blocked.</strong> Review every required node first.</div>
+        <button type="button" class="primary" id="boundedApprovalBtn" disabled>Approve verified scope</button>
+      </div>
+    </section>
+
     <section class="wide">
       <div class="section-head">
-        <h2>Result</h2>
+        <h2>3. Bounded verdict</h2>
         <div class="status-row" id="statusBadges">
           <span class="badge">Not run</span>
         </div>
       </div>
       <div class="body">
+        <div class="verdict-hero" id="verdictHero" aria-live="polite">
+          <div>
+            <div class="verdict-label" id="verdictLabel">Not run</div>
+            <h3 id="verdictTitle">Submit a plan to begin.</h3>
+            <p id="verdictText">A verdict will name the checked property, backend, bounds, and review state.</p>
+          </div>
+          <div class="verdict-meta" id="verdictMeta"></div>
+        </div>
         <div class="journey-callout" id="journeyCallout">
           <div><strong>Unsafe plan detected</strong><span id="journeyCalloutText"></span></div>
           <button type="button" onclick="showViolationJourney()">View violation journey ↓</button>
         </div>
+        <details class="technical">
+          <summary>Technical response and artifacts</summary>
         <div class="result-grid">
           <div class="result">
-            <h3>Local Model Normalized Actions</h3>
+            <h3>Normalized action JSON</h3>
             <pre id="actionsJson">{}</pre>
           </div>
           <div class="result" id="rawModelResult" style="display: none;">
@@ -315,11 +460,12 @@
             <pre id="artifactStatus">No run yet.</pre>
           </div>
         </div>
+        </details>
       </div>
     </section>
 
     <section class="wide visualization" id="violationVisualization">
-      <div class="section-head"><h2>Visualization</h2><span class="badge" id="visualizationBadge">Run a check to populate graphs</span></div>
+      <div class="section-head"><h2>Shortest counterexample and full evidence</h2><span class="badge" id="visualizationBadge">Run a check to populate evidence</span></div>
       <div class="body">
         <div class="visual-summary" id="visualSummary"></div>
         <div class="journey-layout" id="journeyPanel" style="display:none;">
@@ -344,6 +490,13 @@
         </div>
       </div>
     </section>
+
+    <section class="wide" aria-labelledby="activityTitle">
+      <div class="section-head"><h2 id="activityTitle">Agent activity and provenance</h2><span class="badge" id="activityCount">0 events</span></div>
+      <ol class="activity-list" id="activityList">
+        <li class="empty">No agent activity yet.</li>
+      </ol>
+    </section>
   </main>
 
   <script src="/vendor/graph-view-1.0.0.js"></script>
@@ -364,6 +517,7 @@
       },
       {
         name: 'Safe ordered transfer then buy',
+        fixture_key: 'hero_safe',
         user: 'I want to fund my brokerage and then make a small purchase.',
         advice: 'First move 300 from checking into brokerage, then use that brokerage cash to buy 300 of VTI inside the brokerage account.',
         policy: {
@@ -376,8 +530,22 @@
       },
       {
         name: 'Unsafe order: buy before funding',
+        fixture_key: 'hero_unsafe',
         user: 'I want the fastest sequence.',
         advice: 'Grab 300 worth of VTI in the brokerage account now, and after that move 300 from checking into brokerage so the cash is restored.',
+        policy: {
+          budget: 600,
+          max_individual_action_amount: 300,
+          account_balances: { checking: 300, brokerage: 0 },
+          allowed_destination_accounts: ['brokerage'],
+          allowed_action_types: ['buy', 'transfer'],
+        },
+      },
+      {
+        name: 'Clarification required: missing fields',
+        fixture_key: 'hero_clarification',
+        user: 'I want to invest some spare cash this week.',
+        advice: 'Move some money over there and take care of the investment.',
         policy: {
           budget: 600,
           max_individual_action_amount: 300,
@@ -453,8 +621,26 @@ The workbench shall evaluate both choices before approving either one.`,
         },
       },
     ];
+    const UI_STATES = Object.freeze({
+      CLARIFICATION_REQUIRED: 'clarification_required',
+      READY_FOR_REVIEW: 'ready_for_review',
+      VERIFICATION_RUNNING: 'verification_running',
+      VIOLATION_FOUND: 'violation_found',
+      VERIFICATION_UNAVAILABLE: 'verification_unavailable',
+      REVISION_PROPOSED: 'revision_proposed',
+      REVERIFICATION_REQUIRED: 'reverification_required',
+      CHECKS_PASSED: 'checks_passed',
+      BOUNDED_APPROVAL_REQUIRED: 'bounded_approval_required',
+      STOPPED: 'stopped',
+    });
+    let demoFixtures = {};
+    let currentResult = null;
+    let currentRunId = null;
+    let currentController = null;
+    let reviewStates = new Map();
+    let activity = [];
 
-    function initialize() {
+    async function initialize() {
       const select = document.getElementById('exampleSelect');
       examples.forEach((example, index) => {
         const option = document.createElement('option');
@@ -470,6 +656,40 @@ The workbench shall evaluate both choices before approving either one.`,
         fillPolicy(saved.policy || examples[0].policy);
       } else {
         loadExample();
+      }
+      try {
+        const fixtureResponse = await fetch('/workbench-demo-fixtures.json');
+        if (!fixtureResponse.ok) throw new Error('fixture response unavailable');
+        demoFixtures = (await fixtureResponse.json()).fixtures || {};
+      } catch {
+        const fixtureToggle = document.getElementById('fixtureReplay');
+        fixtureToggle.disabled = true;
+        fixtureToggle.parentElement.title = 'Deterministic fixture evidence is unavailable.';
+      }
+      document.getElementById('editGoalBtn').addEventListener('click', () => {
+        document.getElementById('userMessage').focus();
+        if (currentResult) {
+          invalidateEvidence('Editing the goal invalidates prior review and evidence.');
+        } else {
+          setAgentState(UI_STATES.READY_FOR_REVIEW, 'Edit the goal and proposed plan, then ask the agent to review them.');
+        }
+      });
+      document.getElementById('revisionBtn').addEventListener('click', proposeSaferRevision);
+      document.getElementById('stopAgentBtn').addEventListener('click', stopAgent);
+      document.getElementById('boundedApprovalBtn').addEventListener('click', approveBoundedScope);
+      document.getElementById('fsirList').addEventListener('click', handleReviewControl);
+      ['userMessage', 'financeAdvice', 'policyBudget', 'policyMaxAction', 'policyBalances', 'policyDestinations', 'policyActionTypes', 'runTlc']
+        .forEach((id) => document.getElementById(id).addEventListener('change', () => {
+          if (currentResult) invalidateEvidence('Inputs changed after verification; the displayed evidence is stale.');
+        }));
+      addActivity('system', 'Workbench ready; no external action authority granted.');
+      const requestedFixture = new URLSearchParams(window.location.search).get('fixture');
+      const fixtureIndex = examples.findIndex((example) => example.fixture_key === requestedFixture);
+      if (fixtureIndex >= 0 && demoFixtures[requestedFixture]) {
+        select.value = String(fixtureIndex);
+        loadExample();
+        document.getElementById('fixtureReplay').checked = true;
+        await runSemanticCheck();
       }
     }
 
@@ -493,12 +713,14 @@ The workbench shall evaluate both choices before approving either one.`,
       document.getElementById('financeAdvice').value = example.advice;
       fillPolicy(example.policy);
       clearError();
+      resetReviewSurface();
       saveState();
     }
 
     function resetPolicy() {
       fillPolicy(examples[0].policy);
       saveState();
+      if (currentResult) invalidateEvidence('Guardrails were reset; the plan must be verified against the new policy.');
     }
 
     function fillPolicy(policy) {
@@ -545,15 +767,26 @@ The workbench shall evaluate both choices before approving either one.`,
         policy = readPolicy();
       } catch (err) {
         setError(err.message);
+        setAgentState(UI_STATES.CLARIFICATION_REQUIRED, `Guardrail input needs attention: ${err.message}`);
         return;
       }
       const financeAdvice = document.getElementById('financeAdvice').value.trim();
       if (!financeAdvice) {
         setError('Finance advice must not be empty.');
+        setAgentState(UI_STATES.CLARIFICATION_REQUIRED, 'A proposed plan is required before interpretation can begin.');
         return;
       }
+      currentRunId = `SEM-${Date.now().toString(36).toUpperCase()}`;
+      currentController = new AbortController();
+      currentResult = null;
+      reviewStates = new Map();
       runBtn.disabled = true;
-      setBadges([{ text: 'Running local extraction', kind: 'warn' }]);
+      runBtn.textContent = 'Agent working…';
+      setAgentState(UI_STATES.VERIFICATION_RUNNING, 'Interpreting the proposal, checking guardrails, and building bounded evidence.');
+      setStages('running');
+      addActivity('user', `Goal submitted for review (${currentRunId}).`);
+      addActivity('agent', 'Semantic extraction started; downstream checks remain gated on a valid interpretation.');
+      setBadges([{ text: 'Verification in progress', kind: 'warn' }]);
       document.getElementById('actionsJson').textContent = 'Running qwen3:4b extraction...';
       document.getElementById('pythonFindings').innerHTML = '<div class="empty">Waiting for normalized actions.</div>';
       document.getElementById('tlcStatus').textContent = 'Waiting for policy and TLC result...';
@@ -561,28 +794,46 @@ The workbench shall evaluate both choices before approving either one.`,
       resetVisualizationForRun();
 
       try {
-        const res = await fetch('/api/semantic-check', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            user_message: document.getElementById('userMessage').value,
-            finance_advice: financeAdvice,
-            policy,
-            run_model_checker: document.getElementById('runTlc').checked,
-          }),
-        });
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          throw new Error(err.detail || `Server error ${res.status}`);
+        let data;
+        const example = examples[Number(document.getElementById('exampleSelect').value || 0)];
+        const useFixture = document.getElementById('fixtureReplay').checked;
+        if (useFixture && example.fixture_key && demoFixtures[example.fixture_key]) {
+          await new Promise((resolve) => window.setTimeout(resolve, 450));
+          if (currentController.signal.aborted) throw new DOMException('Agent stopped', 'AbortError');
+          data = JSON.parse(JSON.stringify(demoFixtures[example.fixture_key]));
+          addActivity('agent', `Replayed deterministic fixture ${example.fixture_key}; no live model call was made.`);
+        } else {
+          const res = await fetch('/api/semantic-check', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            signal: currentController.signal,
+            body: JSON.stringify({
+              user_message: document.getElementById('userMessage').value,
+              finance_advice: financeAdvice,
+              policy,
+              run_model_checker: document.getElementById('runTlc').checked,
+            }),
+          });
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.detail || `Server error ${res.status}`);
+          }
+          data = await res.json();
         }
-        const data = await res.json();
+        currentResult = data;
         saveState();
         renderResult(data);
       } catch (err) {
+        if (err.name === 'AbortError') return;
         setError(err.message);
-        setBadges([{ text: 'Run failed', kind: 'bad' }]);
+        setBadges([{ text: 'Verification unavailable', kind: 'warn' }]);
+        renderUnavailableVerdict(err.message);
+        setAgentState(UI_STATES.VERIFICATION_UNAVAILABLE, 'The verification service did not return evidence. No safety conclusion was made.');
+        addActivity('system', `Verification unavailable: ${err.message}`);
       } finally {
         runBtn.disabled = false;
+        runBtn.textContent = 'Ask agent to review';
+        currentController = null;
       }
     }
 
@@ -592,7 +843,7 @@ The workbench shall evaluate both choices before approving either one.`,
       const tlc = data.tlc || {};
       const pluscal = data.pluscal || {};
       const badges = [
-        { text: data.decision === 'extraction_failed' ? 'Extraction failed' : (data.safe_to_execute ? 'Safe' : 'Blocked'), kind: data.safe_to_execute ? 'ok' : 'bad' },
+        { text: data.decision === 'extraction_failed' ? 'Needs clarification' : (data.safe_to_execute ? 'Checks passed' : 'Plan blocked'), kind: data.safe_to_execute ? 'ok' : (data.decision === 'extraction_failed' ? 'warn' : 'bad') },
         { text: `${(data.normalized_actions?.actions || []).length} action(s)`, kind: 'neutral' },
         { text: `Python: ${policyFindings.length ? 'findings' : 'passed'}`, kind: policyFindings.length ? 'bad' : 'ok' },
         { text: `TLC: ${tlc.status || 'unknown'}`, kind: tlc.status === 'passed' ? 'ok' : (tlc.status === 'skipped' ? 'warn' : 'bad') },
@@ -616,7 +867,304 @@ The workbench shall evaluate both choices before approving either one.`,
         transformer_usage: data.transformer_usage,
         observability: data.observability,
       }, null, 2);
+      renderFsirReview(data);
+      renderBoundedVerdict(data);
       renderViolationVisualization(data.violation_visualization);
+      setStages(data.decision === 'extraction_failed' ? 'review' : 'evidence');
+    }
+
+    function renderBoundedVerdict(data) {
+      const hero = document.getElementById('verdictHero');
+      const label = document.getElementById('verdictLabel');
+      const title = document.getElementById('verdictTitle');
+      const text = document.getElementById('verdictText');
+      const tlcStatus = data.tlc?.status || 'unknown';
+      const actionCount = data.normalized_actions?.actions?.length || 0;
+      const policy = readPolicy();
+      hero.className = 'verdict-hero visible';
+      document.getElementById('revisionBtn').style.display = 'none';
+
+      if (data.decision === 'extraction_failed') {
+        hero.classList.add('clarify');
+        label.textContent = 'Needs clarification';
+        title.textContent = 'The plan could not be converted into explicit actions.';
+        text.textContent = 'Required details remain unresolved, so policy and formal checks were not run.';
+        setAgentState(UI_STATES.CLARIFICATION_REQUIRED, 'Answer the blocking questions before the agent can verify a plan.');
+        addActivity('agent', 'Interpretation blocked; clarification is required before verification.');
+      } else if (!data.safe_to_execute) {
+        const first = (data.all_findings || [])[0] || {};
+        hero.classList.add('blocked');
+        label.textContent = 'Plan blocked';
+        title.textContent = first.message || 'A configured safety property was violated.';
+        text.textContent = 'The verdict applies only to the displayed FSIR projection, policy, bounds, and checker configuration.';
+        setAgentState(UI_STATES.VIOLATION_FOUND, 'A counterexample is available. The agent can propose a revision, but cannot approve this plan.');
+        document.getElementById('revisionBtn').style.display = '';
+        addActivity('verifier', `Violation found: ${first.code || 'configured_property'}.`);
+      } else if (!document.getElementById('runTlc').checked || tlcStatus !== 'passed') {
+        hero.classList.add('unavailable');
+        label.textContent = !document.getElementById('runTlc').checked || tlcStatus === 'skipped' ? 'Formal check not run' : 'Verification unavailable';
+        title.textContent = 'No bounded formal conclusion is available.';
+        text.textContent = 'The policy mirror returned no finding, but the requested PlusCal/TLC evidence did not pass.';
+        setAgentState(UI_STATES.VERIFICATION_UNAVAILABLE, 'Formal evidence is incomplete. Approval remains blocked.');
+        addActivity('verifier', `Formal verification ended with status ${tlcStatus}.`);
+      } else {
+        hero.classList.add('passed');
+        label.textContent = 'No configured guardrail was violated';
+        title.textContent = 'Every modeled intermediate state satisfied the configured checks.';
+        text.textContent = 'This is a bounded result, not a general claim of financial safety. Review each interpreted action before approval.';
+        setAgentState(UI_STATES.CHECKS_PASSED, 'Evidence is ready; human review of the FSIR projection is still required.');
+        addActivity('verifier', 'Configured policy and requested formal checks completed without a violation.');
+      }
+      document.getElementById('verdictMeta').innerHTML = [
+        `property: FinanceSafety`,
+        `backend: Python + TLC/${escapeHtml(tlcStatus)}`,
+        `bounds: ${actionCount} actions · $${policy.budget} outflow`,
+        `model: ui-fsir/${escapeHtml(currentRunId || 'unversioned')}`,
+      ].map((item) => `<span>${item}</span>`).join('');
+    }
+
+    function renderUnavailableVerdict(message) {
+      const hero = document.getElementById('verdictHero');
+      hero.className = 'verdict-hero visible unavailable';
+      document.getElementById('verdictLabel').textContent = 'Verification unavailable';
+      document.getElementById('verdictTitle').textContent = 'No safety conclusion was produced.';
+      document.getElementById('verdictText').textContent = message;
+      document.getElementById('verdictMeta').innerHTML = '<span>evidence: unavailable</span><span>approval: blocked</span>';
+      setStages('unavailable');
+    }
+
+    function renderFsirReview(data) {
+      const actions = data.normalized_actions?.actions || [];
+      const target = document.getElementById('fsirList');
+      const questions = document.getElementById('blockingQuestions');
+      reviewStates = new Map(actions.map((_, index) => [index, 'pending']));
+      document.getElementById('fsirMeta').innerHTML = [
+        `FSIR projection: ${escapeHtml(currentRunId || 'unversioned')}`,
+        `Exact order: ${actions.length} action${actions.length === 1 ? '' : 's'}`,
+        'Currency: policy-defined integer units',
+        'Source links: UI heuristic',
+        'Approval: required',
+      ].map((item) => `<span class="badge">${item}</span>`).join('');
+      if (!actions.length) {
+        const unresolved = deriveBlockingQuestions(data);
+        questions.className = 'question-list visible';
+        questions.innerHTML = `<strong>${unresolved.length} blocking question${unresolved.length === 1 ? '' : 's'}</strong><ol>${unresolved.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ol>`;
+        target.innerHTML = '<div class="empty">No FSIR action nodes were produced. Verification and approval remain blocked.</div>';
+        document.getElementById('fsirStatus').textContent = 'Needs clarification';
+        document.getElementById('fsirStatus').className = 'badge warn';
+        updateApprovalState();
+        return;
+      }
+      questions.className = 'question-list';
+      questions.innerHTML = '';
+      target.replaceChildren();
+      const advice = document.getElementById('financeAdvice').value;
+      actions.forEach((action, index) => {
+        const node = document.createElement('div');
+        node.className = 'fsir-node';
+        node.dataset.nodeIndex = String(index);
+        const number = document.createElement('span');
+        number.className = 'fsir-index';
+        number.textContent = String(index + 1);
+        const content = document.createElement('div');
+        const heading = document.createElement('strong');
+        heading.textContent = actionLabel(action);
+        const source = document.createElement('div');
+        source.className = 'source';
+        source.append('Source: ');
+        const mark = document.createElement('mark');
+        mark.textContent = findSourceSnippet(advice, action);
+        source.appendChild(mark);
+        const controls = document.createElement('div');
+        controls.className = 'review-controls';
+        controls.setAttribute('aria-label', `Review FSIR action ${index + 1}`);
+        [['approve', 'Approve'], ['edit', 'Edit source'], ['reject', 'Reject']].forEach(([value, copy]) => {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.dataset.review = value;
+          button.textContent = copy;
+          if (value === 'reject') button.classList.add('reject');
+          controls.appendChild(button);
+        });
+        content.append(heading, source, controls);
+        const status = document.createElement('span');
+        status.className = 'badge';
+        status.textContent = 'Awaiting review';
+        node.append(number, content, status);
+        target.appendChild(node);
+      });
+      document.getElementById('fsirStatus').textContent = 'Draft · unapproved';
+      document.getElementById('fsirStatus').className = 'badge warn';
+      updateApprovalState();
+      addActivity('agent', `Produced ${actions.length} reviewable FSIR action node${actions.length === 1 ? '' : 's'}.`);
+    }
+
+    function deriveBlockingQuestions(data) {
+      const message = `${data.extraction_error?.message || ''} ${(data.all_findings || []).map((item) => item.message).join(' ')}`.toLowerCase();
+      const questions = [];
+      if (message.includes('amount') || message.includes('missing')) questions.push('What exact amount should the agent model?');
+      if (message.includes('from') || message.includes('source') || message.includes('missing')) questions.push('Which account is the source of funds?');
+      if (message.includes('to') || message.includes('destination') || message.includes('missing')) questions.push('Which destination account or asset is intended?');
+      return questions.length ? questions : ['Please restate the plan with an action, amount, source account, and destination.'];
+    }
+
+    function actionLabel(action) {
+      const verb = String(action.action || 'action').replaceAll('_', ' ');
+      const amount = action.amount == null ? '' : ` $${action.amount}`;
+      const route = action.from || action.to ? ` · ${action.from || '?'} → ${action.to || '?'}` : '';
+      const asset = action.asset ? ` · ${action.asset}` : '';
+      return `${verb.charAt(0).toUpperCase()}${verb.slice(1)}${amount}${route}${asset}`;
+    }
+
+    function findSourceSnippet(advice, action) {
+      const parts = advice.split(/(?<=[.!?])\s+|,\s+(?=(?:then|and after|after that|next))/i).filter(Boolean);
+      const tokens = [action.action, action.amount, action.from, action.to, action.asset].filter((value) => value != null).map((value) => String(value).toLowerCase());
+      const ranked = parts.map((part) => ({ part, score: tokens.filter((token) => part.toLowerCase().includes(token)).length }));
+      ranked.sort((a, b) => b.score - a.score);
+      return (ranked[0]?.part || advice).trim().slice(0, 220);
+    }
+
+    function handleReviewControl(event) {
+      const button = event.target.closest('[data-review]');
+      if (!button) return;
+      const node = button.closest('.fsir-node');
+      const index = Number(node.dataset.nodeIndex);
+      const decision = button.dataset.review;
+      node.querySelectorAll('[data-review]').forEach((item) => item.classList.remove('selected'));
+      button.classList.add('selected');
+      if (decision === 'edit') {
+        reviewStates.set(index, 'edit');
+        document.getElementById('financeAdvice').focus();
+        invalidateEvidence(`Editing action ${index + 1} invalidates the current evidence.`);
+      } else {
+        reviewStates.set(index, decision);
+        addActivity('user', `${decision === 'approve' ? 'Approved' : 'Rejected'} FSIR action ${index + 1}.`);
+      }
+      const status = node.lastElementChild;
+      status.textContent = decision === 'approve' ? 'Approved' : decision === 'reject' ? 'Rejected' : 'Edit required';
+      status.className = `badge ${decision === 'approve' ? 'ok' : 'warn'}`;
+      updateApprovalState();
+    }
+
+    function updateApprovalState() {
+      const total = reviewStates.size;
+      const approved = [...reviewStates.values()].filter((value) => value === 'approve').length;
+      const rejected = [...reviewStates.values()].filter((value) => value === 'reject').length;
+      const formalComplete = currentResult && currentResult.safe_to_execute && currentResult.tlc?.status === 'passed';
+      const ready = total > 0 && approved === total && !rejected && formalComplete;
+      const button = document.getElementById('boundedApprovalBtn');
+      button.disabled = !ready;
+      document.getElementById('approvalCopy').innerHTML = ready
+        ? `<strong>Ready for bounded approval.</strong> ${approved}/${total} nodes approved; no execution occurs in this sandbox.`
+        : `<strong>Approval blocked.</strong> ${approved}/${total} nodes approved${rejected ? `; ${rejected} rejected` : ''}.`;
+      if (ready) {
+        document.getElementById('fsirStatus').textContent = 'Reviewed';
+        document.getElementById('fsirStatus').className = 'badge ok';
+        setAgentState(UI_STATES.BOUNDED_APPROVAL_REQUIRED, 'All nodes are reviewed and evidence is current. Awaiting bounded human approval.');
+      }
+    }
+
+    function approveBoundedScope() {
+      if (document.getElementById('boundedApprovalBtn').disabled) return;
+      document.getElementById('boundedApprovalBtn').disabled = true;
+      document.getElementById('boundedApprovalBtn').textContent = 'Bounded scope approved';
+      document.getElementById('approvalCopy').innerHTML = '<strong>Approval recorded.</strong> Scope is limited to the displayed FSIR version and configured bounds; this sandbox still performs no execution.';
+      addActivity('user', `Approved bounded scope for ui-fsir/${currentRunId}; execution authority remains disabled.`);
+      document.getElementById('agentStatus').textContent = 'Bounded approval recorded. No trade or transfer was executed.';
+    }
+
+    function proposeSaferRevision() {
+      const advice = document.getElementById('financeAdvice');
+      advice.value = 'First transfer 300 from checking into brokerage. Then buy 300 of VTI using the funded brokerage account.';
+      document.getElementById('revisionBtn').style.display = 'none';
+      invalidateEvidence('A counterexample-guided reorder is proposed. Review the source change, then re-run verification.', false);
+      setAgentState(UI_STATES.REVISION_PROPOSED, 'A counterexample-guided reorder is proposed. Review the source change, then re-run verification.');
+      addActivity('agent', 'Proposed revision: fund brokerage before the purchase to address negative_source_balance.');
+      document.getElementById('runBtn').focus();
+    }
+
+    function stopAgent() {
+      if (currentController) currentController.abort();
+      setAgentState(UI_STATES.STOPPED, 'Agent stopped by the user. No further tools or checks will run until restarted.');
+      setBadges([{ text: 'Agent stopped', kind: 'warn' }]);
+      document.getElementById('runBtn').disabled = false;
+      document.getElementById('runBtn').textContent = 'Restart agent review';
+      document.getElementById('boundedApprovalBtn').disabled = true;
+      addActivity('user', 'Stopped the agent; pending work and approval were canceled.');
+    }
+
+    function resetReviewSurface() {
+      currentResult = null;
+      reviewStates = new Map();
+      document.getElementById('fsirList').innerHTML = '<div class="empty">Run the agent to produce a source-linked, reviewable interpretation.</div>';
+      document.getElementById('blockingQuestions').className = 'question-list';
+      document.getElementById('fsirStatus').textContent = 'No draft';
+      document.getElementById('fsirStatus').className = 'badge';
+      document.getElementById('verdictHero').className = 'verdict-hero';
+      document.getElementById('boundedApprovalBtn').disabled = true;
+      document.getElementById('boundedApprovalBtn').textContent = 'Approve verified scope';
+      document.getElementById('approvalCopy').innerHTML = '<strong>Approval blocked.</strong> Review every required node first.';
+      document.getElementById('revisionBtn').style.display = 'none';
+      setStages('define');
+    }
+
+    function invalidateEvidence(reason, record = true) {
+      if (!currentResult) {
+        setAgentState(UI_STATES.REVERIFICATION_REQUIRED, reason);
+        return;
+      }
+      currentResult = null;
+      document.getElementById('boundedApprovalBtn').disabled = true;
+      document.getElementById('fsirStatus').textContent = 'Changes need verification';
+      document.getElementById('fsirStatus').className = 'badge warn';
+      const hero = document.getElementById('verdictHero');
+      if (hero.classList.contains('visible')) {
+        hero.className = 'verdict-hero visible unavailable';
+        document.getElementById('verdictLabel').textContent = 'Changes need verification';
+        document.getElementById('verdictTitle').textContent = 'Previous evidence is no longer current.';
+        document.getElementById('verdictText').textContent = reason;
+      }
+      setAgentState(UI_STATES.REVERIFICATION_REQUIRED, reason);
+      setStages('review');
+      if (record) addActivity('system', `Evidence invalidated: ${reason}`);
+    }
+
+    function setAgentState(state, message) {
+      document.getElementById('agentStatus').textContent = message;
+      document.getElementById('agentStatus').dataset.state = state;
+    }
+
+    function setStages(active) {
+      const map = {
+        define: ['active', '', ''],
+        running: ['done', 'active', ''],
+        review: ['done', 'active', ''],
+        evidence: ['done', 'done', 'active'],
+        unavailable: ['done', 'done', 'active'],
+      };
+      const values = map[active] || map.define;
+      ['stageDefine', 'stageReview', 'stageEvidence'].forEach((id, index) => {
+        document.getElementById(id).className = `stage ${values[index]}`.trim();
+        document.getElementById(id).querySelector('.stage-dot').textContent = values[index] === 'done' ? '✓' : String(index + 1);
+      });
+    }
+
+    function addActivity(actor, message) {
+      activity.push({ actor, message, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) });
+      const list = document.getElementById('activityList');
+      list.replaceChildren();
+      activity.slice().reverse().forEach((event) => {
+        const item = document.createElement('li');
+        item.className = 'activity-item';
+        const time = document.createElement('span');
+        time.className = 'activity-time';
+        time.textContent = event.time;
+        const copy = document.createElement('span');
+        copy.textContent = `${event.actor}: ${event.message}`;
+        item.append(time, copy);
+        list.appendChild(item);
+      });
+      document.getElementById('activityCount').textContent = `${activity.length} event${activity.length === 1 ? '' : 's'}`;
     }
 
     function renderViolationVisualization(visualization) {
