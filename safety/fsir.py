@@ -9,6 +9,7 @@ accepted as data.
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 from typing import Any, Literal, Optional, Union
 
@@ -43,6 +44,17 @@ BudgetSemantics = Literal[
     "not_applicable",
     "unresolved",
 ]
+FindingCode = Literal[
+    "budget_exceeded",
+    "disallowed_action_kind",
+    "disallowed_destination",
+    "individual_action_limit_exceeded",
+    "negative_source_balance",
+    "non_positive_amount",
+    "unknown_source_account",
+]
+DEBIT_ACTION_KINDS = {"buy", "swap", "transfer", "withdraw"}
+LegacyActionKind = Literal["buy", "sell", "swap", "deposit", "transfer", "withdraw"]
 
 
 if int(pydantic.VERSION.split(".", maxsplit=1)[0]) >= 2:
@@ -146,19 +158,66 @@ class FsirMeta(ClosedModel):
     id: str
     schema_version: Literal["fsir-0.1"] = "fsir-0.1"
     source_document_sha256: StrictStr
+    source_document_span_id: str
     domain_profile: StrictStr
     intent: IntentClassification
     currency: Literal["USD"]
     budget_semantics: BudgetSemantics
     created_by: ToolIdentity
 
-    _id_format = validator("id", allow_reuse=True)(_validate_node_id)
+    _id_format = validator(
+        "id", "source_document_span_id", allow_reuse=True
+    )(_validate_node_id)
 
     @validator("source_document_sha256")
     def _real_sha256(cls, value: str) -> str:
         if not re.fullmatch(r"[0-9a-f]{64}", value):
             raise ValueError("source_document_sha256 must be a lowercase 64-hex digest")
         return value
+
+
+class FinancePolicySnapshot(ClosedModel):
+    id: str
+    source_span_id: str
+    source_sha256: StrictStr
+    budget: StrictInt
+    max_individual_action_amount: StrictInt
+    initial_cash_by_account_id: dict[str, StrictInt]
+    allowed_destination_account_ids: list[str]
+    allowed_action_kinds: list[LegacyActionKind]
+    budget_semantics: Literal["gross_debit"] = "gross_debit"
+
+    _id_format = validator("id", "source_span_id", allow_reuse=True)(
+        _validate_node_id
+    )
+
+    @validator("source_sha256")
+    def _real_sha256(cls, value: str) -> str:
+        if not re.fullmatch(r"[0-9a-f]{64}", value):
+            raise ValueError("source_sha256 must be a lowercase 64-hex digest")
+        return value
+
+    @validator("budget", "max_individual_action_amount")
+    def _non_negative(cls, value: int) -> int:
+        if value < 0:
+            raise ValueError("finance policy limits must be non-negative")
+        return value
+
+    @root_validator(skip_on_failure=True)
+    def _canonical_lists(cls, values: dict[str, Any]) -> dict[str, Any]:
+        for field in (
+            "allowed_destination_account_ids",
+            "allowed_action_kinds",
+        ):
+            items = values.get(field, [])
+            if items != sorted(set(items)):
+                raise ValueError(f"{field} must be sorted and unique")
+        initial_cash = values.get("initial_cash_by_account_id", {})
+        if list(initial_cash) != sorted(initial_cash):
+            raise ValueError(
+                "initial_cash_by_account_id keys must be in canonical sorted order"
+            )
+        return values
 
 
 class ActorSymbol(ClosedModel):
@@ -610,7 +669,7 @@ class Property(ClosedModel):
     kind: Literal["invariant", "action_constraint", "trace", "liveness"]
     formula: Expression
     severity: Literal["error", "warning"]
-    finding_code: Optional[StrictStr] = None
+    finding_code: Optional[FindingCode] = None
     source_span_ids: list[str] = Field(default_factory=list)
 
     _id_format = validator("id", allow_reuse=True)(_validate_node_id)
@@ -722,9 +781,6 @@ class UnresolvedItem(ClosedModel):
     @validator("blocks", each_item=True)
     def _block_id_format(cls, value: str) -> str:
         return _validate_node_id(value)
-
-
-LegacyActionKind = Literal["buy", "sell", "swap", "deposit", "transfer", "withdraw"]
 
 
 class LegacyAction(ClosedModel):
@@ -897,8 +953,234 @@ def _fold_numeric_add(terms: list[Expression], value_type: ValueType) -> Express
     return result
 
 
+def _policy_snapshot_payload(policy: FinancePolicySnapshot) -> dict[str, Any]:
+    return {
+        "allowed_action_kinds": list(policy.allowed_action_kinds),
+        "allowed_destination_account_ids": list(
+            policy.allowed_destination_account_ids
+        ),
+        "budget": policy.budget,
+        "budget_semantics": policy.budget_semantics,
+        "initial_cash_by_account_id": dict(policy.initial_cash_by_account_id),
+        "max_individual_action_amount": policy.max_individual_action_amount,
+    }
+
+
+def _canonical_json(payload: dict[str, Any]) -> str:
+    return json.dumps(payload, sort_keys=True, separators=(",", ":"))
+
+
+def _required_policy_properties(
+    *,
+    case_id: str,
+    policy: FinancePolicySnapshot,
+    state: list[StateVariable],
+    actions: list[FsirAction],
+    control: Control,
+) -> list[Property]:
+    """Derive the complete canonical finance-policy property set."""
+
+    if not actions:
+        return []
+
+    def parameter_ref(action_id: str, name: str) -> Expression:
+        return Expression(
+            op="action_parameter_ref",
+            action_id=action_id,
+            parameter_name=name,
+        )
+
+    action_kind_by_id = {
+        action.id: str(
+            next(
+                parameter.value
+                for parameter in action.parameters
+                if parameter.name == "kind"
+            )
+        )
+        for action in actions
+    }
+    action_ids = [action.id for action in actions]
+    policy_groups = (
+        [branch.action_ids for branch in control.branches]
+        if control.kind == "choice"
+        else [action_ids]
+    )
+    debit_action_ids = {
+        action_id
+        for action_id, action_kind in action_kind_by_id.items()
+        if action_kind in DEBIT_ACTION_KINDS
+    }
+    span_ids = [policy.source_span_id]
+    properties: list[Property] = []
+
+    cash_state_ids = [
+        variable.id for variable in state if variable.type.kind == "money"
+    ]
+    no_negative_terms = [
+        Expression(
+            op="gte",
+            left=Expression(op="state_ref", state_id=state_id),
+            right=_literal(0, "money", "USD"),
+        )
+        for state_id in cash_state_ids
+    ]
+    if no_negative_terms:
+        properties.append(
+            Property(
+                id=f"property.{case_id}.no_negative_cash",
+                kind="invariant",
+                formula=_fold_boolean("and", no_negative_terms),
+                severity="error",
+                finding_code="negative_source_balance",
+                source_span_ids=span_ids,
+            )
+        )
+
+    properties.extend(
+        [
+            Property(
+                id=f"property.{case_id}.allowed_action_kinds",
+                kind="action_constraint",
+                formula=_fold_boolean(
+                    "and",
+                    [
+                        Expression(
+                            op="in",
+                            left=parameter_ref(action.id, "kind"),
+                            right=Expression(
+                                op="set_literal",
+                                values=list(policy.allowed_action_kinds),
+                                value_type="string",
+                            ),
+                        )
+                        for action in actions
+                    ],
+                ),
+                severity="error",
+                finding_code="disallowed_action_kind",
+                source_span_ids=span_ids,
+            ),
+            Property(
+                id=f"property.{case_id}.positive_amounts",
+                kind="action_constraint",
+                formula=_fold_boolean(
+                    "and",
+                    [
+                        Expression(
+                            op="gt",
+                            left=parameter_ref(action.id, "amount"),
+                            right=_literal(0, "money", "USD"),
+                        )
+                        for action in actions
+                    ],
+                ),
+                severity="error",
+                finding_code="non_positive_amount",
+                source_span_ids=span_ids,
+            ),
+            Property(
+                id=f"property.{case_id}.individual_action_limit",
+                kind="action_constraint",
+                formula=_fold_boolean(
+                    "and",
+                    [
+                        Expression(
+                            op="lte",
+                            left=parameter_ref(action.id, "amount"),
+                            right=_literal(
+                                policy.max_individual_action_amount,
+                                "money",
+                                "USD",
+                            ),
+                        )
+                        for action in actions
+                    ],
+                ),
+                severity="error",
+                finding_code="individual_action_limit_exceeded",
+                source_span_ids=span_ids,
+            ),
+            Property(
+                id=f"property.{case_id}.allowed_destinations",
+                kind="action_constraint",
+                formula=_fold_boolean(
+                    "and",
+                    [
+                        Expression(
+                            op="in",
+                            left=parameter_ref(action.id, "destination"),
+                            right=Expression(
+                                op="set_literal",
+                                values=list(
+                                    policy.allowed_destination_account_ids
+                                ),
+                                value_type="account_id",
+                            ),
+                        )
+                        for action in actions
+                    ],
+                ),
+                severity="error",
+                finding_code="disallowed_destination",
+                source_span_ids=span_ids,
+            ),
+            Property(
+                id=f"property.{case_id}.known_sources",
+                kind="action_constraint",
+                formula=_fold_boolean(
+                    "and",
+                    [
+                        Expression(
+                            op="in",
+                            left=parameter_ref(action_id, "source"),
+                            right=Expression(
+                                op="set_literal",
+                                values=list(policy.initial_cash_by_account_id),
+                                value_type="account_id",
+                            ),
+                        )
+                        for action_id in action_ids
+                        if action_id in debit_action_ids
+                    ],
+                ),
+                severity="error",
+                finding_code="unknown_source_account",
+                source_span_ids=span_ids,
+            ),
+        ]
+    )
+
+    budget_formulas = []
+    for group in policy_groups:
+        debit_terms = [
+            parameter_ref(action_id, "amount")
+            for action_id in group
+            if action_id in debit_action_ids
+        ]
+        budget_formulas.append(
+            Expression(
+                op="lte",
+                left=_fold_numeric_add(debit_terms, "money"),
+                right=_literal(policy.budget, "money", "USD"),
+            )
+        )
+    properties.append(
+        Property(
+            id=f"property.{case_id}.gross_debit_budget",
+            kind="action_constraint",
+            formula=_fold_boolean("and", budget_formulas),
+            severity="error",
+            finding_code="budget_exceeded",
+            source_span_ids=span_ids,
+        )
+    )
+    return properties
+
+
 class FsirDocument(ClosedModel):
     meta: FsirMeta
+    policy: FinancePolicySnapshot
     symbols: SymbolTable
     state: list[StateVariable]
     actions: list[FsirAction]
@@ -913,6 +1195,7 @@ class FsirDocument(ClosedModel):
     @root_validator(skip_on_failure=True)
     def _validate_document(cls, values: dict[str, Any]) -> dict[str, Any]:
         meta: FsirMeta = values["meta"]
+        policy: FinancePolicySnapshot = values["policy"]
         symbols: SymbolTable = values["symbols"]
         state: list[StateVariable] = values.get("state", [])
         actions: list[FsirAction] = values.get("actions", [])
@@ -959,6 +1242,7 @@ class FsirDocument(ClosedModel):
             for item in group
         }
         span_ids = {span.id for span in provenance.spans}
+        span_by_id = {span.id: span for span in provenance.spans}
         source_ids = set(provenance.sources)
         _require_unique(provenance.sources, "provenance source")
         _require_unique([span.id for span in provenance.spans], "source span")
@@ -967,6 +1251,53 @@ class FsirDocument(ClosedModel):
                 raise ValueError(
                     f"source span {span.id} references unknown source {span.source_id}"
                 )
+        if meta.source_document_span_id not in span_by_id:
+            raise ValueError(
+                "meta.source_document_span_id references an unknown source span"
+            )
+        source_document_span = span_by_id[meta.source_document_span_id]
+        if source_document_span.origin != "stated":
+            raise ValueError("source document span must have origin='stated'")
+        source_digest = hashlib.sha256(
+            source_document_span.text.encode("utf-8")
+        ).hexdigest()
+        if source_digest != meta.source_document_sha256:
+            raise ValueError(
+                "source_document_sha256 does not match source_document_span_id content"
+            )
+        if policy.source_span_id not in span_by_id:
+            raise ValueError("policy.source_span_id references an unknown source span")
+        policy_span = span_by_id[policy.source_span_id]
+        if policy_span.origin != "derived_deterministically":
+            raise ValueError(
+                "canonical policy span must have origin='derived_deterministically'"
+            )
+        policy_digest = hashlib.sha256(policy_span.text.encode("utf-8")).hexdigest()
+        if policy_digest != policy.source_sha256:
+            raise ValueError("policy.source_sha256 does not match policy source content")
+        expected_policy_text = _canonical_json(_policy_snapshot_payload(policy))
+        if policy_span.text != expected_policy_text:
+            raise ValueError(
+                "policy source span must equal the canonical policy snapshot"
+            )
+        if meta.budget_semantics != policy.budget_semantics:
+            raise ValueError("meta and policy budget semantics must match")
+        if actions and not policy.initial_cash_by_account_id:
+            raise ValueError("action plans require configured initial cash")
+        if actions and not policy.allowed_destination_account_ids:
+            raise ValueError("action plans require allowed destination accounts")
+        if actions and not policy.allowed_action_kinds:
+            raise ValueError("action plans require allowed action kinds")
+        _require_subset(
+            set(policy.initial_cash_by_account_id),
+            account_ids,
+            "policy initial cash accounts",
+        )
+        _require_subset(
+            policy.allowed_destination_account_ids,
+            account_ids,
+            "policy allowed destinations",
+        )
 
         for group in (
             symbols.actors,
@@ -1023,6 +1354,12 @@ class FsirDocument(ClosedModel):
                     )
 
         for action in actions:
+            _require_unique(action.reads, f"action {action.id} read")
+            _require_unique(action.writes, f"action {action.id} write")
+            if action.reads != sorted(action.reads):
+                raise ValueError(f"action {action.id} reads must be canonically sorted")
+            if action.writes != sorted(action.writes):
+                raise ValueError(f"action {action.id} writes must be canonically sorted")
             if action.actor_id not in actor_ids:
                 raise ValueError(
                     f"action {action.id} references undeclared actor {action.actor_id}"
@@ -1252,7 +1589,7 @@ class FsirDocument(ClosedModel):
             _require_subset(item.source_span_ids, span_ids, f"unresolved {item.id} spans")
 
         derivable_ids = (
-            {meta.id}
+            {meta.id, policy.id}
             | symbol_ids
             | state_ids
             | action_ids
@@ -1299,6 +1636,34 @@ class FsirDocument(ClosedModel):
             state=state_by_id,
             symbols=symbols,
         )
+        required_policy_properties = _required_policy_properties(
+            case_id=meta.id.removeprefix("fsir."),
+            policy=policy,
+            state=state,
+            actions=actions,
+            control=control,
+        )
+        actual_policy_properties = [
+            item for item in properties if item.finding_code is not None
+        ]
+        _require_unique(
+            [
+                str(item.finding_code)
+                for item in actual_policy_properties
+                if item.finding_code is not None
+            ],
+            "policy finding code",
+        )
+        if [
+            _dump_model(item, exclude_none=True)
+            for item in actual_policy_properties
+        ] != [
+            _dump_model(item, exclude_none=True)
+            for item in required_policy_properties
+        ]:
+            raise ValueError(
+                "policy properties must exactly match the canonical policy snapshot"
+            )
         for (_, legacy_action, _), mapping in zip(
             _flatten_legacy(compatibility.plan),
             compatibility.id_map,
@@ -1432,17 +1797,30 @@ def legacy_to_fsir(
     flattened = _flatten_legacy(legacy)
     if action_count and not policy_balances:
         raise ValueError("action plans require at least one configured account balance")
-    if action_count and not policy.get("allowed_destination_accounts"):
+    allowed_destination_names = sorted(
+        str(name)
+        for name in policy.get(
+            "allowed_destination_accounts",
+            sorted(policy_balances),
+        )
+    )
+    if action_count and not allowed_destination_names:
         raise ValueError("action plans require at least one allowed destination account")
+    allowed_action_types = sorted(
+        str(item).lower()
+        for item in policy.get(
+            "allowed_action_types",
+            ["buy", "sell", "swap", "deposit", "transfer", "withdraw"],
+        )
+    )
     budget = int(policy.get("budget", 0))
+    max_individual = int(policy.get("max_individual_action_amount", budget))
     money_values = sorted(
         {0, budget, *policy_balances.values(), *(item.amount for _, item, _ in flattened)}
     )
     money_bound_id = f"bound.{safe_case_id}.money"
     account_names = set(policy_balances)
-    account_names.update(
-        str(name) for name in policy.get("allowed_destination_accounts", [])
-    )
+    account_names.update(allowed_destination_names)
     for _, action, _ in flattened:
         account_names.add(action.source)
         account_names.add(action.destination)
@@ -1459,6 +1837,36 @@ def legacy_to_fsir(
         )
         for name in sorted(account_names)
     ]
+    policy_source_id = f"policy.{safe_case_id}"
+    policy_span_id = f"span.{safe_case_id}.policy"
+    policy_snapshot_values = {
+        "budget": budget,
+        "max_individual_action_amount": max_individual,
+        "initial_cash_by_account_id": {
+            account_id_by_name[name]: policy_balances[name]
+            for name in sorted(policy_balances)
+        },
+        "allowed_destination_account_ids": sorted(
+            account_id_by_name[name] for name in allowed_destination_names
+        ),
+        "allowed_action_kinds": allowed_action_types,
+        "budget_semantics": "gross_debit",
+    }
+    policy_text = _canonical_json(policy_snapshot_values)
+    policy_span = SourceSpan(
+        id=policy_span_id,
+        source_id=policy_source_id,
+        text=policy_text,
+        start=0,
+        end=len(policy_text),
+        origin="derived_deterministically",
+    )
+    policy_snapshot = FinancePolicySnapshot(
+        id=f"policy.{safe_case_id}.finance",
+        source_span_id=policy_span_id,
+        source_sha256=hashlib.sha256(policy_text.encode("utf-8")).hexdigest(),
+        **policy_snapshot_values,
+    )
     state: list[StateVariable] = []
     state_id_by_account: dict[str, str] = {}
     for name in sorted(account_names):
@@ -1707,17 +2115,6 @@ def legacy_to_fsir(
     else:
         control = Control(kind="none")
 
-    cash_state_ids = [
-        variable.id for variable in state if variable.type.kind == "money"
-    ]
-    no_negative_terms = [
-        Expression(
-            op="gte",
-            left=Expression(op="state_ref", state_id=state_id),
-            right=_literal(0, "money", "USD"),
-        )
-        for state_id in cash_state_ids
-    ]
     properties = [
         Property(
             id=f"property.{safe_case_id}.type_ok",
@@ -1727,211 +2124,21 @@ def legacy_to_fsir(
             source_span_ids=[span_id],
         ),
     ]
-    if no_negative_terms:
-        no_negative_formula = (
-            no_negative_terms[0]
-            if len(no_negative_terms) == 1
-            else Expression(op="and", args=no_negative_terms)
-        )
-        properties.append(
-            Property(
-                id=f"property.{safe_case_id}.no_negative_cash",
-                kind="invariant",
-                formula=no_negative_formula,
-                severity="error",
-                finding_code="negative_source_balance",
-                source_span_ids=[span_id],
-            )
-        )
-
-    policy_groups = (
-        [branch.action_ids for branch in control.branches]
-        if control.kind == "choice"
-        else [action_ids]
-    )
-    def parameter_ref(action_id: str, name: str) -> Expression:
-        return Expression(
-            op="action_parameter_ref",
-            action_id=action_id,
-            parameter_name=name,
-        )
-
-    allowed_action_types = sorted(
-        str(item).lower()
-        for item in policy.get(
-            "allowed_action_types",
-            ["buy", "sell", "swap", "deposit", "transfer", "withdraw"],
+    properties.extend(
+        _required_policy_properties(
+            case_id=safe_case_id,
+            policy=policy_snapshot,
+            state=state,
+            actions=actions,
+            control=control,
         )
     )
-    if allowed_action_types:
-        properties.append(
-            Property(
-                id=f"property.{safe_case_id}.allowed_action_kinds",
-                kind="action_constraint",
-                formula=_fold_boolean(
-                    "and",
-                    [
-                        Expression(
-                            op="in",
-                            left=parameter_ref(action.id, "kind"),
-                            right=Expression(
-                                op="set_literal",
-                                values=allowed_action_types,
-                                value_type="string",
-                            ),
-                        )
-                        for action in actions
-                    ],
-                ),
-                severity="error",
-                finding_code="disallowed_action_kind",
-                source_span_ids=[span_id],
-            )
-        )
-
-    properties.append(
-        Property(
-            id=f"property.{safe_case_id}.positive_amounts",
-            kind="action_constraint",
-            formula=_fold_boolean(
-                "and",
-                [
-                    Expression(
-                        op="gt",
-                        left=parameter_ref(action.id, "amount"),
-                        right=_literal(0, "money", "USD"),
-                    )
-                    for action in actions
-                ],
-            ),
-            severity="error",
-            finding_code="non_positive_amount",
-            source_span_ids=[span_id],
-        )
-    )
-
-    max_individual = int(policy.get("max_individual_action_amount", budget))
-    properties.append(
-        Property(
-            id=f"property.{safe_case_id}.individual_action_limit",
-            kind="action_constraint",
-            formula=_fold_boolean(
-                "and",
-                [
-                    Expression(
-                        op="lte",
-                        left=parameter_ref(action.id, "amount"),
-                        right=_literal(max_individual, "money", "USD"),
-                    )
-                    for action in actions
-                ],
-            ),
-            severity="error",
-            finding_code="individual_action_limit_exceeded",
-            source_span_ids=[span_id],
-        )
-    )
-
-    allowed_destinations = sorted(
-        account_id_by_name[str(name)]
-        for name in policy.get("allowed_destination_accounts", [])
-    )
-    if allowed_destinations:
-        properties.append(
-            Property(
-                id=f"property.{safe_case_id}.allowed_destinations",
-                kind="action_constraint",
-                formula=_fold_boolean(
-                    "and",
-                    [
-                        Expression(
-                            op="in",
-                            left=parameter_ref(action.id, "destination"),
-                            right=Expression(
-                                op="set_literal",
-                                values=allowed_destinations,
-                                value_type="account_id",
-                            ),
-                        )
-                        for action in actions
-                    ],
-                ),
-                severity="error",
-                finding_code="disallowed_destination",
-                source_span_ids=[span_id],
-            )
-        )
-
-    debit_action_ids = {
-        action_id
-        for action_id, (_, legacy_action, _) in zip(action_ids, flattened)
-        if legacy_action.action in {"buy", "swap", "transfer", "withdraw"}
-    }
-    configured_sources = sorted(
-        account_id_by_name[name] for name in policy_balances
-    )
-    if configured_sources:
-        properties.append(
-            Property(
-                id=f"property.{safe_case_id}.known_sources",
-                kind="action_constraint",
-                formula=_fold_boolean(
-                    "and",
-                    [
-                        Expression(
-                            op="in",
-                            left=parameter_ref(action_id, "source"),
-                            right=Expression(
-                                op="set_literal",
-                                values=configured_sources,
-                                value_type="account_id",
-                            ),
-                        )
-                        for action_id in action_ids
-                        if action_id in debit_action_ids
-                    ],
-                ),
-                severity="error",
-                finding_code="unknown_source_account",
-                source_span_ids=[span_id],
-            )
-        )
-
-    budget_formulas = []
-    for group in policy_groups:
-        debit_terms = [
-            parameter_ref(action_id, "amount")
-            for action_id in group
-            if action_id in debit_action_ids
-        ]
-        budget_formulas.append(
-            Expression(
-                op="lte",
-                left=_fold_numeric_add(debit_terms, "money"),
-                right=_literal(budget, "money", "USD"),
-            )
-        )
-    properties.append(
-        Property(
-            id=f"property.{safe_case_id}.gross_debit_budget",
-            kind="action_constraint",
-            formula=_fold_boolean("and", budget_formulas),
-            severity="error",
-            finding_code="budget_exceeded",
-            source_span_ids=[span_id],
-        )
-    )
-    if not actions:
-        properties = [
-            property_item
-            for property_item in properties
-            if property_item.finding_code is None
-        ]
 
     document = FsirDocument(
         meta=FsirMeta(
             id=f"fsir.{safe_case_id}",
             source_document_sha256=source_hash,
+            source_document_span_id=span_id,
             domain_profile="finance.safety",
             intent=intent,
             currency="USD",
@@ -1939,6 +2146,7 @@ def legacy_to_fsir(
             created_by=created_by
             or ToolIdentity(name="tla-finance-legacy-adapter", version="fsir-0.1"),
         ),
+        policy=policy_snapshot,
         symbols=SymbolTable(
             actors=actors,
             accounts=accounts,
@@ -1969,8 +2177,8 @@ def legacy_to_fsir(
         ),
         unresolved=_deduplicate_unresolved(requested_unresolved),
         provenance=Provenance(
-            sources=[source_id],
-            spans=[span],
+            sources=[source_id, policy_source_id],
+            spans=[span, policy_span],
             derivations=derivations,
         ),
         compatibility=LegacyCompatibility(plan=legacy, id_map=id_map),
@@ -2271,6 +2479,7 @@ __all__ = [
     "ControlEdge",
     "DomainBound",
     "Expression",
+    "FinancePolicySnapshot",
     "FsirAction",
     "FsirDocument",
     "FsirMeta",

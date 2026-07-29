@@ -309,6 +309,7 @@ class FsirFoundationTests(unittest.TestCase):
             set(schema["required"]),
             {
                 "meta",
+                "policy",
                 "symbols",
                 "state",
                 "actions",
@@ -586,6 +587,73 @@ class FsirFoundationTests(unittest.TestCase):
             }
             with self.subTest(case=migrated["name"]):
                 self.assertEqual(failed_codes, expected_static_codes)
+
+    def test_source_digest_is_bound_to_provenance_content(self):
+        raw = copy.deepcopy(
+            self.fsir_by_name["safe_transfer_then_buy_order_sensitive"]["fsir"]
+        )
+        raw["meta"]["source_document_sha256"] = "0" * 64
+        with self.assertRaisesRegex(ValidationError, "does not match"):
+            FsirDocument(**raw)
+
+    def test_duplicate_dependency_entries_fail_closed(self):
+        raw = copy.deepcopy(
+            self.fsir_by_name["safe_transfer_then_buy_order_sensitive"]["fsir"]
+        )
+        raw["actions"][0]["reads"].append(raw["actions"][0]["reads"][0])
+        with self.assertRaisesRegex(ValidationError, "duplicate action.*read"):
+            FsirDocument(**raw)
+
+    def test_policy_constraint_set_is_mandatory_and_exact(self):
+        raw = copy.deepcopy(
+            self.fsir_by_name["safe_transfer_then_buy_order_sensitive"]["fsir"]
+        )
+        raw["properties"] = [
+            item for item in raw["properties"] if item["kind"] != "action_constraint"
+        ]
+        with self.assertRaisesRegex(ValidationError, "canonical policy snapshot"):
+            FsirDocument(**raw)
+
+        raw = copy.deepcopy(
+            self.fsir_by_name["safe_transfer_then_buy_order_sensitive"]["fsir"]
+        )
+        budget_property = next(
+            item
+            for item in raw["properties"]
+            if item.get("finding_code") == "budget_exceeded"
+        )
+        budget_property["formula"] = {
+            "op": "literal",
+            "value": True,
+            "value_type": "boolean",
+        }
+        with self.assertRaisesRegex(ValidationError, "canonical policy snapshot"):
+            FsirDocument(**raw)
+
+    def test_policy_finding_codes_are_closed_and_semantically_bound(self):
+        raw = copy.deepcopy(
+            self.fsir_by_name["safe_transfer_then_buy_order_sensitive"]["fsir"]
+        )
+        budget_property = next(
+            item
+            for item in raw["properties"]
+            if item.get("finding_code") == "budget_exceeded"
+        )
+        budget_property["finding_code"] = "disallowed_destination"
+        with self.assertRaises(ValidationError):
+            FsirDocument(**raw)
+
+        raw = copy.deepcopy(
+            self.fsir_by_name["safe_transfer_then_buy_order_sensitive"]["fsir"]
+        )
+        budget_property = next(
+            item
+            for item in raw["properties"]
+            if item.get("finding_code") == "budget_exceeded"
+        )
+        budget_property["finding_code"] = ""
+        with self.assertRaises(ValidationError):
+            FsirDocument(**raw)
 
 
 if __name__ == "__main__":

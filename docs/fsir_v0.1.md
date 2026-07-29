@@ -29,6 +29,9 @@ An FSIR document contains:
 
 - `meta`: version, real source digest, domain profile, intent classification,
   currency, budget meaning, and creation tool;
+- `policy`: a canonical, provenance-bound finance-policy snapshot containing
+  budget, per-action cap, configured initial cash, allowed destinations and
+  action kinds, and gross-debit semantics;
 - `symbols`: declared actors/services, cash accounts, instruments, and asset
   positions;
 - `state`: typed initial variables, or an explicit bounded nondeterministic
@@ -54,6 +57,7 @@ The checked-in generated schema is
 Cross-reference validation rejects:
 
 - duplicate stable IDs;
+- source or policy digests that do not match their exact provenance content;
 - undeclared action actors;
 - unknown state/symbol/action/property/span references;
 - untyped or malformed expression shapes;
@@ -66,11 +70,14 @@ Cross-reference validation rejects:
 - placeholder/non-SHA-256 source digests.
 
 Budget semantics are mandatory. The current compatibility migration records
-`gross_debit`, matching the existing policy mirror's counter. The adapter also
-emits executable, typed FSIR action constraints for gross-debit budget,
+`gross_debit`, matching the existing policy mirror's counter. The canonical
+policy snapshot is the single trusted source from which validation derives the
+mandatory, exact executable property set; deleting, weakening, or relabelling
+one of those properties fails validation. The adapter emits typed constraints
+for gross-debit budget,
 per-action amount, positive amount, allowed destination, allowed action kind,
-and known debit-source checks. `Property.finding_code` binds each constraint to
-the existing safety verdict vocabulary. A future net spend or external-outflow
+and known debit-source checks. `Property.finding_code` uses a closed vocabulary
+and is bound to each canonical formula. A future net spend or external-outflow
 policy must use a different explicit value and formula.
 
 ## No action versus underspecified action
@@ -125,7 +132,8 @@ one blocking underspecified-action case. Tests reparse every FSIR document and
 recover every original action/choice payload exactly. Adversarial regressions
 also mutate parameter/expression/domain types, dependencies, bounds,
 compatibility paths/effects, identities, choice topology, and action kinds; all
-must fail closed.
+must fail closed. Further regressions remove or weaken the policy property set,
+forge source identity, relabel verdict codes, and duplicate dependency entries.
 
 ## Current boundary
 

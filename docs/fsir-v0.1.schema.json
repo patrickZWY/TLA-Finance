@@ -635,6 +635,78 @@
       "title": "Expression",
       "type": "object"
     },
+    "FinancePolicySnapshot": {
+      "additionalProperties": false,
+      "properties": {
+        "allowed_action_kinds": {
+          "items": {
+            "enum": [
+              "buy",
+              "sell",
+              "swap",
+              "deposit",
+              "transfer",
+              "withdraw"
+            ],
+            "type": "string"
+          },
+          "title": "Allowed Action Kinds",
+          "type": "array"
+        },
+        "allowed_destination_account_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Allowed Destination Account Ids",
+          "type": "array"
+        },
+        "budget": {
+          "title": "Budget",
+          "type": "integer"
+        },
+        "budget_semantics": {
+          "const": "gross_debit",
+          "default": "gross_debit",
+          "title": "Budget Semantics",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "initial_cash_by_account_id": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Initial Cash By Account Id",
+          "type": "object"
+        },
+        "max_individual_action_amount": {
+          "title": "Max Individual Action Amount",
+          "type": "integer"
+        },
+        "source_sha256": {
+          "title": "Source Sha256",
+          "type": "string"
+        },
+        "source_span_id": {
+          "title": "Source Span Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "source_span_id",
+        "source_sha256",
+        "budget",
+        "max_individual_action_amount",
+        "initial_cash_by_account_id",
+        "allowed_destination_account_ids",
+        "allowed_action_kinds"
+      ],
+      "title": "FinancePolicySnapshot",
+      "type": "object"
+    },
     "FsirAction": {
       "additionalProperties": false,
       "properties": {
@@ -769,11 +841,16 @@
         "source_document_sha256": {
           "title": "Source Document Sha256",
           "type": "string"
+        },
+        "source_document_span_id": {
+          "title": "Source Document Span Id",
+          "type": "string"
         }
       },
       "required": [
         "id",
         "source_document_sha256",
+        "source_document_span_id",
         "domain_profile",
         "intent",
         "currency",
@@ -974,6 +1051,15 @@
         "finding_code": {
           "anyOf": [
             {
+              "enum": [
+                "budget_exceeded",
+                "disallowed_action_kind",
+                "disallowed_destination",
+                "individual_action_limit_exceeded",
+                "negative_source_balance",
+                "non_positive_amount",
+                "unknown_source_account"
+              ],
               "type": "string"
             },
             {
@@ -1400,6 +1486,9 @@
     "meta": {
       "$ref": "#/$defs/FsirMeta"
     },
+    "policy": {
+      "$ref": "#/$defs/FinancePolicySnapshot"
+    },
     "properties": {
       "items": {
         "$ref": "#/$defs/Property"
@@ -1430,6 +1519,7 @@
   },
   "required": [
     "meta",
+    "policy",
     "symbols",
     "state",
     "actions",
