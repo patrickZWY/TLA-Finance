@@ -80,6 +80,13 @@ and known debit-source checks. `Property.finding_code` uses a closed vocabulary
 and is bound to each canonical formula. A future net spend or external-outflow
 policy must use a different explicit value and formula.
 
+Every declared cash account has exactly one money state. Configured policy
+accounts must use the exact concrete initial balance from
+`policy.initial_cash_by_account_id` and cite the canonical policy span;
+unconfigured accounts must instead use an explicit bounded nondeterministic
+initial domain. The policy ID is derived canonically from the FSIR document ID.
+This prevents the trusted policy and the formal initial state from drifting.
+
 ## No action versus underspecified action
 
 An empty legacy action list no longer has one ambiguous meaning:

@@ -1,4 +1,5 @@
 import copy
+import hashlib
 import json
 import unittest
 from pathlib import Path
@@ -653,6 +654,75 @@ class FsirFoundationTests(unittest.TestCase):
         )
         budget_property["finding_code"] = ""
         with self.assertRaises(ValidationError):
+            FsirDocument(**raw)
+
+    def test_policy_and_money_state_initials_are_bound_both_ways(self):
+        raw = copy.deepcopy(
+            self.fsir_by_name["safe_transfer_then_buy_order_sensitive"]["fsir"]
+        )
+        configured_account = next(iter(raw["policy"]["initial_cash_by_account_id"]))
+        money_state = next(
+            item
+            for item in raw["state"]
+            if item.get("symbol_id") == configured_account
+        )
+        money_state["initial"] += 1
+        with self.assertRaisesRegex(ValidationError, "canonical policy balance"):
+            FsirDocument(**raw)
+
+        raw = copy.deepcopy(
+            self.fsir_by_name["safe_transfer_then_buy_order_sensitive"]["fsir"]
+        )
+        configured_account = next(iter(raw["policy"]["initial_cash_by_account_id"]))
+        raw["policy"]["initial_cash_by_account_id"][configured_account] += 1
+        policy_payload = {
+            key: value
+            for key, value in raw["policy"].items()
+            if key not in {"id", "source_span_id", "source_sha256"}
+        }
+        policy_text = json.dumps(
+            policy_payload,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        policy_span = next(
+            item
+            for item in raw["provenance"]["spans"]
+            if item["id"] == raw["policy"]["source_span_id"]
+        )
+        policy_span["text"] = policy_text
+        policy_span["end"] = len(policy_text)
+        raw["policy"]["source_sha256"] = hashlib.sha256(
+            policy_text.encode("utf-8")
+        ).hexdigest()
+        with self.assertRaisesRegex(ValidationError, "canonical policy balance"):
+            FsirDocument(**raw)
+
+    def test_policy_identity_and_configured_state_provenance_are_canonical(self):
+        for migrated in self.fsir_suite["cases"]:
+            document = migrated["fsir"]
+            policy_span_id = document["policy"]["source_span_id"]
+            configured_accounts = set(
+                document["policy"]["initial_cash_by_account_id"]
+            )
+            configured_states = [
+                item
+                for item in document["state"]
+                if item.get("symbol_id") in configured_accounts
+            ]
+            with self.subTest(case=migrated["name"]):
+                self.assertTrue(
+                    all(
+                        policy_span_id in item["source_span_ids"]
+                        for item in configured_states
+                    )
+                )
+
+        raw = copy.deepcopy(
+            self.fsir_by_name["safe_transfer_then_buy_order_sensitive"]["fsir"]
+        )
+        raw["policy"]["id"] = "policy.forged.finance"
+        with self.assertRaisesRegex(ValidationError, "canonical ID"):
             FsirDocument(**raw)
 
 

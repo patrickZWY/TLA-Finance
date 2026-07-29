@@ -1282,6 +1282,11 @@ class FsirDocument(ClosedModel):
             )
         if meta.budget_semantics != policy.budget_semantics:
             raise ValueError("meta and policy budget semantics must match")
+        expected_policy_id = f"policy.{meta.id.removeprefix('fsir.')}.finance"
+        if policy.id != expected_policy_id:
+            raise ValueError(
+                f"policy.id must be the canonical ID {expected_policy_id}"
+            )
         if actions and not policy.initial_cash_by_account_id:
             raise ValueError("action plans require configured initial cash")
         if actions and not policy.allowed_destination_account_ids:
@@ -1352,6 +1357,46 @@ class FsirDocument(ClosedModel):
                     raise ValueError(
                         f"state {variable.id} initial domain exceeds its enum type"
                     )
+
+        money_states_by_account: dict[str, list[StateVariable]] = {
+            account_id: [] for account_id in account_ids
+        }
+        for variable in state:
+            if variable.type.kind != "money":
+                continue
+            if variable.symbol_id not in account_ids:
+                raise ValueError(
+                    f"money state {variable.id} must reference a declared cash account"
+                )
+            money_states_by_account[variable.symbol_id].append(variable)
+        for account_id, money_states in money_states_by_account.items():
+            if len(money_states) != 1:
+                raise ValueError(
+                    f"cash account {account_id} requires exactly one money state"
+                )
+            money_state = money_states[0]
+            if account_id in policy.initial_cash_by_account_id:
+                expected_initial = policy.initial_cash_by_account_id[account_id]
+                if (
+                    money_state.initial != expected_initial
+                    or money_state.initial_domain_bound_id is not None
+                ):
+                    raise ValueError(
+                        f"money state {money_state.id} initial must equal canonical "
+                        f"policy balance {expected_initial}"
+                    )
+                if policy.source_span_id not in money_state.source_span_ids:
+                    raise ValueError(
+                        f"configured money state {money_state.id} must cite policy span"
+                    )
+            elif (
+                money_state.initial is not None
+                or money_state.initial_domain_bound_id is None
+            ):
+                raise ValueError(
+                    f"unconfigured money state {money_state.id} must use an "
+                    "explicit bounded nondeterministic initial domain"
+                )
 
         for action in actions:
             _require_unique(action.reads, f"action {action.id} read")
@@ -1880,7 +1925,7 @@ def legacy_to_fsir(
                 type=StateType(kind="money", currency="USD"),
                 initial=initial,
                 initial_domain_bound_id=money_bound_id if initial is None else None,
-                source_span_ids=[span_id],
+                source_span_ids=[span_id, policy_span_id],
             )
         )
         if initial is None:

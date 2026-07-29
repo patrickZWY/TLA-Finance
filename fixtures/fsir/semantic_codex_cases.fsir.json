@@ -989,7 +989,8 @@
             "initial": 500,
             "observable": true,
             "source_span_ids": [
-              "span.safe_multi_action_cash_plan.text"
+              "span.safe_multi_action_cash_plan.text",
+              "span.safe_multi_action_cash_plan.policy"
             ],
             "symbol_id": "account.brokerage",
             "type": {
@@ -1003,7 +1004,8 @@
             "initial": 1000,
             "observable": true,
             "source_span_ids": [
-              "span.safe_multi_action_cash_plan.text"
+              "span.safe_multi_action_cash_plan.text",
+              "span.safe_multi_action_cash_plan.policy"
             ],
             "symbol_id": "account.checking",
             "type": {
@@ -1017,7 +1019,8 @@
             "initial_domain_bound_id": "bound.safe_multi_action_cash_plan.money",
             "observable": true,
             "source_span_ids": [
-              "span.safe_multi_action_cash_plan.text"
+              "span.safe_multi_action_cash_plan.text",
+              "span.safe_multi_action_cash_plan.policy"
             ],
             "symbol_id": "account.paycheck",
             "type": {
@@ -1031,7 +1034,8 @@
             "initial": 300,
             "observable": true,
             "source_span_ids": [
-              "span.safe_multi_action_cash_plan.text"
+              "span.safe_multi_action_cash_plan.text",
+              "span.safe_multi_action_cash_plan.policy"
             ],
             "symbol_id": "account.savings",
             "type": {
@@ -2146,7 +2150,8 @@
             "initial": 500,
             "observable": true,
             "source_span_ids": [
-              "span.implicit_cumulative_budget_violation.text"
+              "span.implicit_cumulative_budget_violation.text",
+              "span.implicit_cumulative_budget_violation.policy"
             ],
             "symbol_id": "account.brokerage",
             "type": {
@@ -2160,7 +2165,8 @@
             "initial": 1000,
             "observable": true,
             "source_span_ids": [
-              "span.implicit_cumulative_budget_violation.text"
+              "span.implicit_cumulative_budget_violation.text",
+              "span.implicit_cumulative_budget_violation.policy"
             ],
             "symbol_id": "account.checking",
             "type": {
@@ -2174,7 +2180,8 @@
             "initial": 300,
             "observable": true,
             "source_span_ids": [
-              "span.implicit_cumulative_budget_violation.text"
+              "span.implicit_cumulative_budget_violation.text",
+              "span.implicit_cumulative_budget_violation.policy"
             ],
             "symbol_id": "account.savings",
             "type": {
@@ -3075,7 +3082,8 @@
             "initial": 0,
             "observable": true,
             "source_span_ids": [
-              "span.bad_order_buy_before_funding.text"
+              "span.bad_order_buy_before_funding.text",
+              "span.bad_order_buy_before_funding.policy"
             ],
             "symbol_id": "account.brokerage",
             "type": {
@@ -3089,7 +3097,8 @@
             "initial": 600,
             "observable": true,
             "source_span_ids": [
-              "span.bad_order_buy_before_funding.text"
+              "span.bad_order_buy_before_funding.text",
+              "span.bad_order_buy_before_funding.policy"
             ],
             "symbol_id": "account.checking",
             "type": {
@@ -3103,7 +3112,8 @@
             "initial": 100,
             "observable": true,
             "source_span_ids": [
-              "span.bad_order_buy_before_funding.text"
+              "span.bad_order_buy_before_funding.text",
+              "span.bad_order_buy_before_funding.policy"
             ],
             "symbol_id": "account.savings",
             "type": {
@@ -4267,7 +4277,8 @@
             "initial_domain_bound_id": "bound.mixed_destination_and_budget_violation.money",
             "observable": true,
             "source_span_ids": [
-              "span.mixed_destination_and_budget_violation.text"
+              "span.mixed_destination_and_budget_violation.text",
+              "span.mixed_destination_and_budget_violation.policy"
             ],
             "symbol_id": "account.alex",
             "type": {
@@ -4281,7 +4292,8 @@
             "initial": 500,
             "observable": true,
             "source_span_ids": [
-              "span.mixed_destination_and_budget_violation.text"
+              "span.mixed_destination_and_budget_violation.text",
+              "span.mixed_destination_and_budget_violation.policy"
             ],
             "symbol_id": "account.brokerage",
             "type": {
@@ -4295,7 +4307,8 @@
             "initial": 1000,
             "observable": true,
             "source_span_ids": [
-              "span.mixed_destination_and_budget_violation.text"
+              "span.mixed_destination_and_budget_violation.text",
+              "span.mixed_destination_and_budget_violation.policy"
             ],
             "symbol_id": "account.checking",
             "type": {
@@ -4309,7 +4322,8 @@
             "initial": 300,
             "observable": true,
             "source_span_ids": [
-              "span.mixed_destination_and_budget_violation.text"
+              "span.mixed_destination_and_budget_violation.text",
+              "span.mixed_destination_and_budget_violation.policy"
             ],
             "symbol_id": "account.savings",
             "type": {
@@ -4527,7 +4541,8 @@
             "initial": 500,
             "observable": true,
             "source_span_ids": [
-              "span.soft_recommendation_no_executable_action.text"
+              "span.soft_recommendation_no_executable_action.text",
+              "span.soft_recommendation_no_executable_action.policy"
             ],
             "symbol_id": "account.brokerage",
             "type": {
@@ -4541,7 +4556,8 @@
             "initial": 1000,
             "observable": true,
             "source_span_ids": [
-              "span.soft_recommendation_no_executable_action.text"
+              "span.soft_recommendation_no_executable_action.text",
+              "span.soft_recommendation_no_executable_action.policy"
             ],
             "symbol_id": "account.checking",
             "type": {
@@ -4555,7 +4571,8 @@
             "initial": 300,
             "observable": true,
             "source_span_ids": [
-              "span.soft_recommendation_no_executable_action.text"
+              "span.soft_recommendation_no_executable_action.text",
+              "span.soft_recommendation_no_executable_action.policy"
             ],
             "symbol_id": "account.savings",
             "type": {
@@ -4753,7 +4770,8 @@
             "initial": 500,
             "observable": true,
             "source_span_ids": [
-              "span.missing_amount_instruction_is_omitted.text"
+              "span.missing_amount_instruction_is_omitted.text",
+              "span.missing_amount_instruction_is_omitted.policy"
             ],
             "symbol_id": "account.brokerage",
             "type": {
@@ -4767,7 +4785,8 @@
             "initial": 1000,
             "observable": true,
             "source_span_ids": [
-              "span.missing_amount_instruction_is_omitted.text"
+              "span.missing_amount_instruction_is_omitted.text",
+              "span.missing_amount_instruction_is_omitted.policy"
             ],
             "symbol_id": "account.checking",
             "type": {
@@ -4781,7 +4800,8 @@
             "initial": 300,
             "observable": true,
             "source_span_ids": [
-              "span.missing_amount_instruction_is_omitted.text"
+              "span.missing_amount_instruction_is_omitted.text",
+              "span.missing_amount_instruction_is_omitted.policy"
             ],
             "symbol_id": "account.savings",
             "type": {
@@ -5399,7 +5419,8 @@
             "initial_domain_bound_id": "bound.prompt_injection_hide_unsafe_transfer.money",
             "observable": true,
             "source_span_ids": [
-              "span.prompt_injection_hide_unsafe_transfer.text"
+              "span.prompt_injection_hide_unsafe_transfer.text",
+              "span.prompt_injection_hide_unsafe_transfer.policy"
             ],
             "symbol_id": "account.alex",
             "type": {
@@ -5413,7 +5434,8 @@
             "initial": 500,
             "observable": true,
             "source_span_ids": [
-              "span.prompt_injection_hide_unsafe_transfer.text"
+              "span.prompt_injection_hide_unsafe_transfer.text",
+              "span.prompt_injection_hide_unsafe_transfer.policy"
             ],
             "symbol_id": "account.brokerage",
             "type": {
@@ -5427,7 +5449,8 @@
             "initial": 1000,
             "observable": true,
             "source_span_ids": [
-              "span.prompt_injection_hide_unsafe_transfer.text"
+              "span.prompt_injection_hide_unsafe_transfer.text",
+              "span.prompt_injection_hide_unsafe_transfer.policy"
             ],
             "symbol_id": "account.checking",
             "type": {
@@ -5441,7 +5464,8 @@
             "initial": 300,
             "observable": true,
             "source_span_ids": [
-              "span.prompt_injection_hide_unsafe_transfer.text"
+              "span.prompt_injection_hide_unsafe_transfer.text",
+              "span.prompt_injection_hide_unsafe_transfer.policy"
             ],
             "symbol_id": "account.savings",
             "type": {
@@ -6042,7 +6066,8 @@
             "initial": 500,
             "observable": true,
             "source_span_ids": [
-              "span.buy_inside_account_uses_account_as_source_and_destination.text"
+              "span.buy_inside_account_uses_account_as_source_and_destination.text",
+              "span.buy_inside_account_uses_account_as_source_and_destination.policy"
             ],
             "symbol_id": "account.brokerage",
             "type": {
@@ -6056,7 +6081,8 @@
             "initial": 1000,
             "observable": true,
             "source_span_ids": [
-              "span.buy_inside_account_uses_account_as_source_and_destination.text"
+              "span.buy_inside_account_uses_account_as_source_and_destination.text",
+              "span.buy_inside_account_uses_account_as_source_and_destination.policy"
             ],
             "symbol_id": "account.checking",
             "type": {
@@ -6070,7 +6096,8 @@
             "initial": 300,
             "observable": true,
             "source_span_ids": [
-              "span.buy_inside_account_uses_account_as_source_and_destination.text"
+              "span.buy_inside_account_uses_account_as_source_and_destination.text",
+              "span.buy_inside_account_uses_account_as_source_and_destination.policy"
             ],
             "symbol_id": "account.savings",
             "type": {
@@ -7436,7 +7463,8 @@
             "initial": 500,
             "observable": true,
             "source_span_ids": [
-              "span.repeated_small_transfers_exceed_budget.text"
+              "span.repeated_small_transfers_exceed_budget.text",
+              "span.repeated_small_transfers_exceed_budget.policy"
             ],
             "symbol_id": "account.brokerage",
             "type": {
@@ -7450,7 +7478,8 @@
             "initial": 1000,
             "observable": true,
             "source_span_ids": [
-              "span.repeated_small_transfers_exceed_budget.text"
+              "span.repeated_small_transfers_exceed_budget.text",
+              "span.repeated_small_transfers_exceed_budget.policy"
             ],
             "symbol_id": "account.checking",
             "type": {
@@ -7464,7 +7493,8 @@
             "initial": 300,
             "observable": true,
             "source_span_ids": [
-              "span.repeated_small_transfers_exceed_budget.text"
+              "span.repeated_small_transfers_exceed_budget.text",
+              "span.repeated_small_transfers_exceed_budget.policy"
             ],
             "symbol_id": "account.savings",
             "type": {
@@ -8344,7 +8374,8 @@
             "initial": 500,
             "observable": true,
             "source_span_ids": [
-              "span.hidden_external_destination_in_benign_summary.text"
+              "span.hidden_external_destination_in_benign_summary.text",
+              "span.hidden_external_destination_in_benign_summary.policy"
             ],
             "symbol_id": "account.brokerage",
             "type": {
@@ -8358,7 +8389,8 @@
             "initial": 1000,
             "observable": true,
             "source_span_ids": [
-              "span.hidden_external_destination_in_benign_summary.text"
+              "span.hidden_external_destination_in_benign_summary.text",
+              "span.hidden_external_destination_in_benign_summary.policy"
             ],
             "symbol_id": "account.checking",
             "type": {
@@ -8372,7 +8404,8 @@
             "initial_domain_bound_id": "bound.hidden_external_destination_in_benign_summary.money",
             "observable": true,
             "source_span_ids": [
-              "span.hidden_external_destination_in_benign_summary.text"
+              "span.hidden_external_destination_in_benign_summary.text",
+              "span.hidden_external_destination_in_benign_summary.policy"
             ],
             "symbol_id": "account.external_wallet",
             "type": {
@@ -8386,7 +8419,8 @@
             "initial": 300,
             "observable": true,
             "source_span_ids": [
-              "span.hidden_external_destination_in_benign_summary.text"
+              "span.hidden_external_destination_in_benign_summary.text",
+              "span.hidden_external_destination_in_benign_summary.policy"
             ],
             "symbol_id": "account.savings",
             "type": {
@@ -9259,7 +9293,8 @@
             "initial": 0,
             "observable": true,
             "source_span_ids": [
-              "span.safe_transfer_then_buy_order_sensitive.text"
+              "span.safe_transfer_then_buy_order_sensitive.text",
+              "span.safe_transfer_then_buy_order_sensitive.policy"
             ],
             "symbol_id": "account.brokerage",
             "type": {
@@ -9273,7 +9308,8 @@
             "initial": 600,
             "observable": true,
             "source_span_ids": [
-              "span.safe_transfer_then_buy_order_sensitive.text"
+              "span.safe_transfer_then_buy_order_sensitive.text",
+              "span.safe_transfer_then_buy_order_sensitive.policy"
             ],
             "symbol_id": "account.checking",
             "type": {
@@ -9287,7 +9323,8 @@
             "initial": 100,
             "observable": true,
             "source_span_ids": [
-              "span.safe_transfer_then_buy_order_sensitive.text"
+              "span.safe_transfer_then_buy_order_sensitive.text",
+              "span.safe_transfer_then_buy_order_sensitive.policy"
             ],
             "symbol_id": "account.savings",
             "type": {
@@ -9928,7 +9965,8 @@
             "initial": 500,
             "observable": true,
             "source_span_ids": [
-              "span.unknown_source_account_debit.text"
+              "span.unknown_source_account_debit.text",
+              "span.unknown_source_account_debit.policy"
             ],
             "symbol_id": "account.brokerage",
             "type": {
@@ -9942,7 +9980,8 @@
             "initial": 1000,
             "observable": true,
             "source_span_ids": [
-              "span.unknown_source_account_debit.text"
+              "span.unknown_source_account_debit.text",
+              "span.unknown_source_account_debit.policy"
             ],
             "symbol_id": "account.checking",
             "type": {
@@ -9956,7 +9995,8 @@
             "initial_domain_bound_id": "bound.unknown_source_account_debit.money",
             "observable": true,
             "source_span_ids": [
-              "span.unknown_source_account_debit.text"
+              "span.unknown_source_account_debit.text",
+              "span.unknown_source_account_debit.policy"
             ],
             "symbol_id": "account.crypto_wallet",
             "type": {
@@ -9970,7 +10010,8 @@
             "initial": 300,
             "observable": true,
             "source_span_ids": [
-              "span.unknown_source_account_debit.text"
+              "span.unknown_source_account_debit.text",
+              "span.unknown_source_account_debit.policy"
             ],
             "symbol_id": "account.savings",
             "type": {
