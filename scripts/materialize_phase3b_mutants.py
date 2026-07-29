@@ -39,7 +39,8 @@ from safety.fsir_lowering import (
     LOWERER_VERSION,
     MANIFEST_VERSION,
     SOURCE_MAP_VERSION,
-    UnsupportedFsirError,
+    LoweredFsir,
+    TlcClassification,
     build_execution_evidence_manifest,
     classify_tlc_result,
     lower_fsir,
@@ -47,6 +48,13 @@ from safety.fsir_lowering import (
     verify_execution_evidence,
     verify_lowered_fsir,
     write_lowered_fsir,
+)
+from safety.phase4a_semantic_oracles import (
+    ORACLE_RULES,
+    SemanticOracleViolation,
+    derive_lower_input,
+    tool_identity as semantic_oracle_tool_identity,
+    validate_semantic_projection,
 )
 
 ANCHOR_COMMIT = "d45efd09ffe5c77b89fcad1954d7959e54b7b8f3"
@@ -59,7 +67,7 @@ CORPUS_SHA256 = (
 MUTANT_ORACLES_SHA256 = (
     "bcb3c1773f301a8cebce86edf66a279b1a6b3fdfc0b0568366f51b36b5ef7b76"
 )
-RESULT_SCHEMA = "phase4a-semantic-mutant-results-0.1"
+RESULT_SCHEMA = "phase4a-semantic-mutant-results-0.2"
 
 
 def _set(path: str, value: Any) -> dict[str, Any]:
@@ -211,15 +219,12 @@ MUTATIONS: dict[str, dict[str, Any]] = {
                 "pending.transfer1 = submitted and cash.brokerage >= 0",
             )
         ],
-        "fixture": "concurrent",
     },
     "mutant.18.single-trace": {
         "gate": "interleaving_coverage",
         "patches": [
             _set("expected_semantics.control", "sequence"),
-            _set("materializer_annotations.only_settlement_first", True),
         ],
-        "fixture": "ordered",
     },
     "mutant.19.metadata-only": {
         "gate": "retry_bound_trace",
@@ -344,6 +349,45 @@ LOWER_EXPECTATIONS = {
         "event_ids": [],
     },
 }
+
+
+def lower_execution_report(
+    *,
+    mutant_id: str,
+    mapping_proof: dict[str, Any],
+    input_payload: dict[str, Any],
+    classification: TlcClassification,
+    trace: list[dict[str, Any]],
+) -> dict[str, Any]:
+    expected = LOWER_EXPECTATIONS[mutant_id]
+    event_ids = [item["event_id"] for item in trace]
+    satisfied = (
+        classification.kind == expected["kind"]
+        and list(classification.violated_property_ids)
+        == expected["property_ids"]
+        and event_ids == expected["event_ids"]
+    )
+    return {
+        "schema_version": "phase4a-lower-mutant-execution-0.2",
+        "mutant_id": mutant_id,
+        "input_derivation": "projection_to_fsir_total_mapping",
+        "base_fixture_id": mapping_proof["declared_mapping"][
+            "base_fixture_id"
+        ],
+        "mutated_projection_sha256": mapping_proof[
+            "full_projection_binding"
+        ]["mutated_sha256"],
+        "mapping_proof_sha256": sha256_json(mapping_proof),
+        "input_fsir_sha256": sha256_json(input_payload),
+        "expected_classification": expected["kind"],
+        "expected_property_ids": expected["property_ids"],
+        "expected_event_ids": expected["event_ids"],
+        "observed_classification": classification.kind,
+        "observed_property_ids": list(classification.violated_property_ids),
+        "observed_event_ids": event_ids,
+        "returncode": classification.returncode,
+        "satisfied": satisfied,
+    }
 
 
 def canonical_json(value: Any) -> str:
@@ -504,6 +548,13 @@ def corpus_mutants(
         raise ValueError("corpus must declare exactly 32 unique semantic mutants")
     if set(ids) != set(MUTATIONS) or set(ids) != set(oracle_by_id):
         raise ValueError("materializer registry/oracle coverage is not exact")
+    non_lower_ids = {
+        item["mutant_id"]
+        for item in oracle_results["results"]
+        if item["lowering_expectation"] != "lower"
+    }
+    if non_lower_ids != set(ORACLE_RULES):
+        raise ValueError("closed semantic-oracle coverage is not exact")
     result = []
     for case, mutant in declared:
         oracle = oracle_by_id[mutant["id"]]
@@ -609,14 +660,21 @@ def toolchain(jar: Path) -> dict[str, str]:
 def execute_lower_mutant(
     *,
     mutant_id: str,
-    registry: dict[str, Any],
+    case: dict[str, Any],
+    baseline_projection: dict[str, Any],
+    mutated_projection: dict[str, Any],
     corpus_dir: Path,
     output_dir: Path,
     jar: Path,
 ) -> dict[str, Any]:
-    fixture = registry["fixture"]
-    fixture_dir = corpus_dir / "backend-artifacts" / fixture
-    document = FsirDocument(**load_json(fixture_dir / "input.fsir.json"))
+    input_payload, mapping_proof = derive_lower_input(
+        mutant_id=mutant_id,
+        case=case,
+        baseline_projection=baseline_projection,
+        mutated_projection=mutated_projection,
+        corpus_dir=corpus_dir,
+    )
+    document = FsirDocument(**input_payload)
     module_name = {
         "mutant.17.submitted-is-settled": "Phase4aSubmittedIsSettled",
         "mutant.18.single-trace": "Phase4aSingleTrace",
@@ -625,12 +683,8 @@ def execute_lower_mutant(
     verify_lowered_fsir(document, lowered, tla_tools_jar=jar)
     artifact_dir = output_dir / "lower" / mutant_id
     write_lowered_fsir(lowered, artifact_dir)
-    input_payload = (
-        document.model_dump(by_alias=True, exclude_none=True)
-        if hasattr(document, "model_dump")
-        else document.dict(by_alias=True, exclude_none=True)
-    )
     write_json(artifact_dir / "input.fsir.json", input_payload)
+    write_json(artifact_dir / "mapping-proof.json", mapping_proof)
     returncode, tlc_output = run_tlc(artifact_dir, lowered.module_name, jar)
     (artifact_dir / "tlc-output.txt").write_text(
         tlc_output, encoding="utf-8"
@@ -646,27 +700,15 @@ def execute_lower_mutant(
     )
     write_json(artifact_dir / "classification.json", classification.to_json())
     write_json(artifact_dir / "normalized-trace.json", trace)
-    expected = LOWER_EXPECTATIONS[mutant_id]
     event_ids = [item["event_id"] for item in trace]
-    satisfied = (
-        classification.kind == expected["kind"]
-        and list(classification.violated_property_ids)
-        == expected["property_ids"]
-        and event_ids == expected["event_ids"]
+    report = lower_execution_report(
+        mutant_id=mutant_id,
+        mapping_proof=mapping_proof,
+        input_payload=input_payload,
+        classification=classification,
+        trace=trace,
     )
-    report = {
-        "schema_version": "phase4a-lower-mutant-execution-0.1",
-        "mutant_id": mutant_id,
-        "fixture_materialized": fixture,
-        "expected_classification": expected["kind"],
-        "expected_property_ids": expected["property_ids"],
-        "expected_event_ids": expected["event_ids"],
-        "observed_classification": classification.kind,
-        "observed_property_ids": list(classification.violated_property_ids),
-        "observed_event_ids": event_ids,
-        "returncode": returncode,
-        "satisfied": satisfied,
-    }
+    satisfied = report["satisfied"]
     write_json(artifact_dir / "execution-report.json", report)
     execution_manifest = build_execution_evidence_manifest(
         lowered=lowered,
@@ -695,7 +737,12 @@ def execute_lower_mutant(
     if not satisfied:
         raise AssertionError(f"lower mutant oracle failed: {mutant_id}")
     return {
-        "fixture_materialized": fixture,
+        "input_derivation": "projection_to_fsir_total_mapping",
+        "base_fixture_id": mapping_proof["declared_mapping"][
+            "base_fixture_id"
+        ],
+        "mapping_proof_sha256": sha256_json(mapping_proof),
+        "input_fsir_sha256": sha256_json(input_payload),
         "module_name": lowered.module_name,
         "classification": classification.kind,
         "property_ids": list(classification.violated_property_ids),
@@ -724,10 +771,11 @@ def materialize_all(
     for case, mutant, oracle in declared:
         mutant_id = mutant["id"]
         registry = MUTATIONS[mutant_id]
-        projection = semantic_projection(case)
-        baseline_sha256 = sha256_json(projection)
-        proof = apply_patches(projection, registry["patches"])
-        candidate_sha256 = sha256_json(projection)
+        baseline_projection = semantic_projection(case)
+        mutated_projection = copy.deepcopy(baseline_projection)
+        baseline_sha256 = sha256_json(baseline_projection)
+        proof = apply_patches(mutated_projection, registry["patches"])
+        candidate_sha256 = sha256_json(mutated_projection)
         if baseline_sha256 == candidate_sha256:
             raise AssertionError(f"placeholder mutation detected: {mutant_id}")
 
@@ -736,36 +784,69 @@ def materialize_all(
         if disposition == "lower":
             backend = execute_lower_mutant(
                 mutant_id=mutant_id,
-                registry=registry,
+                case=case,
+                baseline_projection=baseline_projection,
+                mutated_projection=mutated_projection,
                 corpus_dir=corpus_dir,
                 output_dir=output_dir,
                 jar=jar,
             )
             phase = "post_tlc_semantic_oracle"
             artifacts_claimed = True
+            semantic_oracle = {
+                "tool": "approved_fsir_lowering_real_tlc_oracle",
+                "observed": "rejected",
+                "gate_code": registry["gate"],
+                "classification": backend["classification"],
+                "property_ids": backend["property_ids"],
+                "event_ids": backend["event_ids"],
+                "returncode": backend["returncode"],
+                "expected_gate_matched": True,
+            }
             rejection = {
-                "class": "SemanticMutantRejected",
-                "message": oracle["expected_gate"],
+                "class": "ExecutableSemanticOracleViolation",
+                "gate_code": registry["gate"],
+                "message": (
+                    f"executable semantic gate {registry['gate']} rejected "
+                    f"{mutant_id} after real TLC"
+                ),
                 "before_executable_artifacts": False,
             }
         else:
-            expected_rejection = case["lowering_oracle"]["expected_rejection"]
-            if disposition == "unsupported":
-                error = UnsupportedFsirError(
-                    expected_rejection["message_contains"]
+            validate_semantic_projection(
+                mutant_id, baseline_projection, baseline_projection
+            )
+            try:
+                validate_semantic_projection(
+                    mutant_id, baseline_projection, mutated_projection
                 )
+            except SemanticOracleViolation as error:
+                observed_error = error
             else:
-                error = ValueError(expected_rejection["message_contains"])
-            if error.__class__.__name__ != expected_rejection["class"]:
-                raise AssertionError(f"wrong rejection class for {mutant_id}")
-            if expected_rejection["message_contains"] not in str(error):
-                raise AssertionError(f"wrong rejection detail for {mutant_id}")
+                raise AssertionError(
+                    f"closed semantic oracle accepted {mutant_id}"
+                )
+            if observed_error.gate_code != registry["gate"]:
+                raise AssertionError(
+                    f"semantic gate mismatch for {mutant_id}: "
+                    f"{observed_error.gate_code} != {registry['gate']}"
+                )
             phase = "pre_lowering_semantic_gate"
             artifacts_claimed = False
-            rejection = {
-                "class": error.__class__.__name__,
-                "message": str(error),
-                "before_executable_artifacts": True,
+            semantic_oracle = {
+                "tool": semantic_oracle_tool_identity(),
+                "input_sha256": candidate_sha256,
+                "baseline_input_sha256": baseline_sha256,
+                "observed": "rejected",
+                "gate_code": observed_error.gate_code,
+                "changed_paths": list(observed_error.changed_paths),
+                "class": observed_error.__class__.__name__,
+                "message": str(observed_error),
+                "expected_gate_matched": observed_error.gate_code
+                == registry["gate"],
+            }
+            rejection = observed_error.to_json() | {
+                "before_executable_artifacts": True
             }
 
         results.append(
@@ -784,13 +865,7 @@ def materialize_all(
                 "baseline_projection_sha256": baseline_sha256,
                 "mutated_projection_sha256": candidate_sha256,
                 "mutation_proof": proof,
-                "semantic_oracle": {
-                    "observed": "rejected",
-                    "expected_gate_matched": True,
-                    "frozen_contract_mismatch": True,
-                    "gate_code": registry["gate"],
-                    "mutated_paths": [item["path"] for item in proof],
-                },
+                "semantic_oracle": semantic_oracle,
                 "rejection": rejection,
                 "backend": backend,
             }
@@ -845,7 +920,7 @@ def materialize_all(
         if path.is_file() and path.name != "suite-manifest.json"
     }
     suite_manifest = {
-        "schema_version": "phase4a-semantic-mutant-suite-manifest-0.1",
+        "schema_version": "phase4a-semantic-mutant-suite-manifest-0.2",
         "hash_algorithm": "sha256",
         "artifacts": deterministic_files,
     }
@@ -853,13 +928,294 @@ def materialize_all(
     return report
 
 
+def recompute_projection(
+    case: dict[str, Any], mutant_id: str
+) -> tuple[dict[str, Any], dict[str, Any], list[dict[str, Any]]]:
+    baseline = semantic_projection(case)
+    mutated = copy.deepcopy(baseline)
+    proof = apply_patches(mutated, MUTATIONS[mutant_id]["patches"])
+    return baseline, mutated, proof
+
+
+def _expected_lower_files(mutant_id: str) -> set[str]:
+    module = {
+        "mutant.17.submitted-is-settled": "Phase4aSubmittedIsSettled",
+        "mutant.18.single-trace": "Phase4aSingleTrace",
+    }[mutant_id]
+    prefix = f"lower/{mutant_id}/"
+    return {
+        prefix + f"{module}.cfg",
+        prefix + f"{module}.tla",
+        prefix + "classification.json",
+        prefix + "execution-evidence-manifest.json",
+        prefix + "execution-report.json",
+        prefix + "input.fsir.json",
+        prefix + "manifest.json",
+        prefix + "mapping-proof.json",
+        prefix + "normalized-trace.json",
+        prefix + "source-map.json",
+        prefix + "tlc-output.txt",
+    }
+
+
+def _validate_exact_file_set(
+    evidence_dir: Path, lower_ids: list[str]
+) -> None:
+    expected = {
+        "semantic-mutant-results.json",
+        "suite-manifest.json",
+    }
+    for mutant_id in lower_ids:
+        expected.update(_expected_lower_files(mutant_id))
+    observed = {
+        path.relative_to(evidence_dir).as_posix()
+        for path in evidence_dir.rglob("*")
+        if path.is_file()
+    }
+    if observed != expected:
+        missing = sorted(expected - observed)
+        extra = sorted(observed - expected)
+        raise ValueError(
+            f"evidence artifact set mismatch; missing={missing}, extra={extra}"
+        )
+
+
+def _validate_suite_manifest(evidence_dir: Path) -> None:
+    manifest = load_json(evidence_dir / "suite-manifest.json")
+    if set(manifest) != {"schema_version", "hash_algorithm", "artifacts"}:
+        raise ValueError("suite manifest has unexpected fields")
+    if (
+        manifest["schema_version"]
+        != "phase4a-semantic-mutant-suite-manifest-0.2"
+        or manifest["hash_algorithm"] != "sha256"
+    ):
+        raise ValueError("suite manifest identity is invalid")
+    expected_paths = {
+        path.relative_to(evidence_dir).as_posix()
+        for path in evidence_dir.rglob("*")
+        if path.is_file() and path.name != "suite-manifest.json"
+    }
+    if set(manifest["artifacts"]) != expected_paths:
+        raise ValueError("suite manifest does not cover the exact artifact set")
+    for relative in sorted(expected_paths):
+        if sha256_file(evidence_dir / relative) != manifest["artifacts"][relative]:
+            raise ValueError(f"evidence hash mismatch: {relative}")
+
+
+def _reconstruct_lowered(artifact_dir: Path, module_name: str) -> LoweredFsir:
+    return LoweredFsir(
+        module_name=module_name,
+        tla_text=(artifact_dir / f"{module_name}.tla").read_text(
+            encoding="utf-8"
+        ),
+        cfg_text=(artifact_dir / f"{module_name}.cfg").read_text(
+            encoding="utf-8"
+        ),
+        source_map=load_json(artifact_dir / "source-map.json"),
+        manifest=load_json(artifact_dir / "manifest.json"),
+    )
+
+
+def _validate_lower_backend(
+    *,
+    result: dict[str, Any],
+    case: dict[str, Any],
+    baseline_projection: dict[str, Any],
+    mutated_projection: dict[str, Any],
+    corpus_dir: Path,
+    evidence_dir: Path,
+    jar: Path | None,
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    mutant_id = result["mutant_id"]
+    artifact_dir = evidence_dir / "lower" / mutant_id
+    expected_input, expected_mapping = derive_lower_input(
+        mutant_id=mutant_id,
+        case=case,
+        baseline_projection=baseline_projection,
+        mutated_projection=mutated_projection,
+        corpus_dir=corpus_dir,
+    )
+    if load_json(artifact_dir / "mapping-proof.json") != expected_mapping:
+        raise ValueError(f"lower mapping proof drift: {mutant_id}")
+    if load_json(artifact_dir / "input.fsir.json") != expected_input:
+        raise ValueError(f"lower input is not projection-derived: {mutant_id}")
+    document = FsirDocument(**expected_input)
+    module_name = {
+        "mutant.17.submitted-is-settled": "Phase4aSubmittedIsSettled",
+        "mutant.18.single-trace": "Phase4aSingleTrace",
+    }[mutant_id]
+    lowered = _reconstruct_lowered(artifact_dir, module_name)
+    regenerated = lower_fsir(document, module_name, tla_tools_jar=None)
+    expected_manifest = copy.deepcopy(regenerated.manifest)
+    expected_manifest["tools"]["tlc"] = {
+        "identity": "tla2tools.jar",
+        "sha256": TLA_TOOLS_SHA256,
+    }
+    if (
+        lowered.tla_text != regenerated.tla_text
+        or lowered.cfg_text != regenerated.cfg_text
+        or lowered.source_map != regenerated.source_map
+        or lowered.manifest != expected_manifest
+    ):
+        raise ValueError(f"lowered artifact regeneration drift: {mutant_id}")
+    if jar is not None:
+        verify_lowered_fsir(document, lowered, tla_tools_jar=jar)
+
+    classification_raw = load_json(artifact_dir / "classification.json")
+    if set(classification_raw) != {
+        "kind",
+        "returncode",
+        "violated_property_ids",
+        "detail",
+    }:
+        raise ValueError(f"classification fields drift: {mutant_id}")
+    classification = TlcClassification(
+        kind=classification_raw["kind"],
+        returncode=classification_raw["returncode"],
+        violated_property_ids=tuple(
+            classification_raw["violated_property_ids"]
+        ),
+        detail=classification_raw["detail"],
+    )
+    tlc_output = (artifact_dir / "tlc-output.txt").read_text(
+        encoding="utf-8"
+    )
+    if (
+        classify_tlc_result(
+            classification.returncode, tlc_output, lowered.source_map
+        )
+        != classification
+    ):
+        raise ValueError(f"TLC classification cannot be recomputed: {mutant_id}")
+    trace = (
+        normalize_tlc_counterexample(tlc_output, lowered.source_map)
+        if classification.kind
+        in {"property_violation", "temporal_violation"}
+        else []
+    )
+    if load_json(artifact_dir / "normalized-trace.json") != trace:
+        raise ValueError(f"normalized trace cannot be recomputed: {mutant_id}")
+    expected_report = lower_execution_report(
+        mutant_id=mutant_id,
+        mapping_proof=expected_mapping,
+        input_payload=expected_input,
+        classification=classification,
+        trace=trace,
+    )
+    if not expected_report["satisfied"]:
+        raise ValueError(f"lower semantic oracle was not satisfied: {mutant_id}")
+    if load_json(artifact_dir / "execution-report.json") != expected_report:
+        raise ValueError(f"execution report cannot be recomputed: {mutant_id}")
+    expected_execution_manifest = build_execution_evidence_manifest(
+        lowered=lowered,
+        tlc_output=tlc_output,
+        normalized_trace=trace,
+        classification=classification,
+        execution_report=expected_report,
+    )
+    if (
+        load_json(artifact_dir / "execution-evidence-manifest.json")
+        != expected_execution_manifest
+    ):
+        raise ValueError(f"execution manifest cannot be recomputed: {mutant_id}")
+    verify_execution_evidence(
+        lowered=lowered,
+        tlc_output=tlc_output,
+        normalized_trace=trace,
+        classification=classification,
+        execution_report=expected_report,
+        execution_manifest=expected_execution_manifest,
+    )
+    artifact_hashes = {
+        path.relative_to(artifact_dir).as_posix(): sha256_file(path)
+        for path in sorted(artifact_dir.iterdir())
+        if path.is_file()
+    }
+    expected_backend = {
+        "input_derivation": "projection_to_fsir_total_mapping",
+        "base_fixture_id": expected_mapping["declared_mapping"][
+            "base_fixture_id"
+        ],
+        "mapping_proof_sha256": sha256_json(expected_mapping),
+        "input_fsir_sha256": sha256_json(expected_input),
+        "module_name": module_name,
+        "classification": classification.kind,
+        "property_ids": list(classification.violated_property_ids),
+        "event_ids": [item["event_id"] for item in trace],
+        "returncode": classification.returncode,
+        "artifact_hashes": artifact_hashes,
+        "execution_evidence_manifest": expected_execution_manifest,
+    }
+    expected_semantic_oracle = {
+        "tool": "approved_fsir_lowering_real_tlc_oracle",
+        "observed": "rejected",
+        "gate_code": MUTATIONS[mutant_id]["gate"],
+        "classification": classification.kind,
+        "property_ids": list(classification.violated_property_ids),
+        "event_ids": [item["event_id"] for item in trace],
+        "returncode": classification.returncode,
+        "expected_gate_matched": True,
+    }
+    expected_rejection = {
+        "class": "ExecutableSemanticOracleViolation",
+        "gate_code": MUTATIONS[mutant_id]["gate"],
+        "message": (
+            f"executable semantic gate {MUTATIONS[mutant_id]['gate']} "
+            f"rejected {mutant_id} after real TLC"
+        ),
+        "before_executable_artifacts": False,
+    }
+    return expected_backend, expected_semantic_oracle, expected_rejection
+
+
 def validate_existing(
     corpus_dir: Path, evidence_dir: Path, jar: Path | None
 ) -> dict[str, Any]:
     verify_frozen_corpus(corpus_dir)
+    verify_backend_anchor()
+    if jar is not None and sha256_file(jar) != TLA_TOOLS_SHA256:
+        raise ValueError("TLA+ tools jar does not match the approved hash")
     report = load_json(evidence_dir / "semantic-mutant-results.json")
-    if report["schema_version"] != RESULT_SCHEMA:
+    if set(report) != {
+        "schema_version",
+        "frozen_inputs",
+        "toolchain",
+        "summary",
+        "replay",
+        "results",
+    } or report["schema_version"] != RESULT_SCHEMA:
         raise ValueError("unexpected materializer result schema")
+    if report["frozen_inputs"] != {
+        "lowering_commit": ANCHOR_COMMIT,
+        "corpus_sha256": CORPUS_SHA256,
+        "mutant_oracles_sha256": MUTANT_ORACLES_SHA256,
+        "tla_tools_jar_sha256": TLA_TOOLS_SHA256,
+    }:
+        raise ValueError("frozen input identity drift")
+    required_toolchain = {
+        "python",
+        "pydantic",
+        "java",
+        "tla_tools_jar_sha256",
+        "lowerer_version",
+        "source_map_version",
+        "lowering_manifest_version",
+        "execution_manifest_version",
+    }
+    if set(report["toolchain"]) != required_toolchain:
+        raise ValueError("toolchain metadata is incomplete")
+    if (
+        report["toolchain"]["tla_tools_jar_sha256"] != TLA_TOOLS_SHA256
+        or report["toolchain"]["lowerer_version"] != LOWERER_VERSION
+        or report["toolchain"]["source_map_version"] != SOURCE_MAP_VERSION
+        or report["toolchain"]["lowering_manifest_version"]
+        != MANIFEST_VERSION
+        or report["toolchain"]["execution_manifest_version"]
+        != EXECUTION_MANIFEST_VERSION
+        or any(not report["toolchain"][key] for key in required_toolchain)
+    ):
+        raise ValueError("toolchain identity drift")
+
     corpus = load_json(corpus_dir / "corpus.json")
     oracles = load_json(corpus_dir / "mutant-results.json")
     declared = corpus_mutants(corpus, oracles)
@@ -867,7 +1223,15 @@ def validate_existing(
     observed_ids = [result["mutant_id"] for result in report["results"]]
     if observed_ids != expected_ids:
         raise ValueError("result ordering/coverage differs from frozen corpus")
-    if report["summary"] != {
+    lower_ids = [
+        oracle["mutant_id"]
+        for oracle in oracles["results"]
+        if oracle["lowering_expectation"] == "lower"
+    ]
+    _validate_exact_file_set(evidence_dir, lower_ids)
+    _validate_suite_manifest(evidence_dir)
+
+    expected_summary = {
         "total": 32,
         "oracle_defined": 32,
         "executed": 32,
@@ -881,69 +1245,98 @@ def validate_existing(
             "unsupported": 20,
         },
         "status": "pass",
-    }:
-        raise ValueError("aggregate materializer counts are not exact")
-    oracle_by_id = {
-        result["mutant_id"]: result for result in oracles["results"]
     }
-    for result in report["results"]:
-        oracle = oracle_by_id[result["mutant_id"]]
-        if not result["executed"] or result["status"] != "executed_rejected":
-            raise ValueError(f"unexecuted result: {result['mutant_id']}")
-        if result["survived"]:
-            raise ValueError(f"surviving mutant: {result['mutant_id']}")
-        if (
-            result["expected_gate"] != oracle["expected_gate"]
-            or result["lowering_expectation"]
-            != oracle["lowering_expectation"]
-        ):
-            raise ValueError(f"oracle drift: {result['mutant_id']}")
-        if (
-            result["baseline_projection_sha256"]
-            == result["mutated_projection_sha256"]
-        ):
-            raise ValueError(f"placeholder mutation: {result['mutant_id']}")
-        if not result["mutation_proof"]:
-            raise ValueError(f"missing mutation proof: {result['mutant_id']}")
-        semantic_oracle = result.get("semantic_oracle", {})
-        if semantic_oracle != {
-            "observed": "rejected",
-            "expected_gate_matched": True,
-            "frozen_contract_mismatch": True,
-            "gate_code": result["semantic_gate_code"],
-            "mutated_paths": [
-                item["path"] for item in result["mutation_proof"]
-            ],
-        }:
-            raise ValueError(
-                f"semantic oracle was not executed: {result['mutant_id']}"
+    if report["summary"] != expected_summary:
+        raise ValueError("aggregate materializer counts are not exact")
+    if report["replay"] != {
+        "command": (
+            "python3 scripts/materialize_phase3b_mutants.py "
+            "--corpus benchmarks/phase3b-corpus-v0.2.1 "
+            "--tla-tools-jar \"$TLA_TOOLS_JAR\" "
+            "--output \"$OUTPUT\""
+        )
+    }:
+        raise ValueError("replay command drift")
+
+    for result, (case, mutant, oracle) in zip(
+        report["results"], declared, strict=True
+    ):
+        mutant_id = mutant["id"]
+        baseline, mutated, proof = recompute_projection(case, mutant_id)
+        expected_core = {
+            "case_id": case["id"],
+            "mutant_id": mutant_id,
+            "edit": mutant["edit"],
+            "expected_gate": mutant["expected"],
+            "semantic_gate_code": MUTATIONS[mutant_id]["gate"],
+            "lowering_expectation": oracle["lowering_expectation"],
+            "status": "executed_rejected",
+            "executed": True,
+            "survived": False,
+            "baseline_projection_sha256": sha256_json(baseline),
+            "mutated_projection_sha256": sha256_json(mutated),
+            "mutation_proof": proof,
+        }
+        for key, expected in expected_core.items():
+            if result.get(key) != expected:
+                raise ValueError(f"recomputed result drift: {mutant_id}/{key}")
+        if oracle["lowering_expectation"] == "lower":
+            expected_backend, expected_semantic, expected_rejection = (
+                _validate_lower_backend(
+                    result=result,
+                    case=case,
+                    baseline_projection=baseline,
+                    mutated_projection=mutated,
+                    corpus_dir=corpus_dir,
+                    evidence_dir=evidence_dir,
+                    jar=jar,
+                )
             )
-        if result["lowering_expectation"] == "lower":
-            if not result["artifacts_claimed"] or result["backend"] is None:
-                raise ValueError(f"missing backend evidence: {result['mutant_id']}")
-            expected = LOWER_EXPECTATIONS[result["mutant_id"]]
-            backend = result["backend"]
-            if (
-                backend["classification"] != expected["kind"]
-                or backend["property_ids"] != expected["property_ids"]
-                or backend["event_ids"] != expected["event_ids"]
-            ):
-                raise ValueError(f"backend oracle mismatch: {result['mutant_id']}")
-        elif (
-            result["artifacts_claimed"]
-            or result["backend"] is not None
-            or not result["rejection"]["before_executable_artifacts"]
-        ):
-            raise ValueError(
-                f"non-lower case claimed artifacts: {result['mutant_id']}"
-            )
-    manifest = load_json(evidence_dir / "suite-manifest.json")
-    for relative, expected in manifest["artifacts"].items():
-        observed = sha256_file(evidence_dir / relative)
-        if observed != expected:
-            raise ValueError(f"evidence hash mismatch: {relative}")
-    if jar is not None and sha256_file(jar) != TLA_TOOLS_SHA256:
-        raise ValueError("TLA+ tools jar does not match the approved hash")
+            expected_phase = "post_tlc_semantic_oracle"
+            expected_artifacts = True
+        else:
+            validate_semantic_projection(mutant_id, baseline, baseline)
+            try:
+                validate_semantic_projection(mutant_id, baseline, mutated)
+            except SemanticOracleViolation as error:
+                observed_error = error
+            else:
+                raise ValueError(
+                    f"closed semantic oracle accepted {mutant_id}"
+                )
+            expected_backend = None
+            expected_semantic = {
+                "tool": semantic_oracle_tool_identity(),
+                "input_sha256": sha256_json(mutated),
+                "baseline_input_sha256": sha256_json(baseline),
+                "observed": "rejected",
+                "gate_code": observed_error.gate_code,
+                "changed_paths": list(observed_error.changed_paths),
+                "class": observed_error.__class__.__name__,
+                "message": str(observed_error),
+                "expected_gate_matched": observed_error.gate_code
+                == MUTATIONS[mutant_id]["gate"],
+            }
+            expected_rejection = observed_error.to_json() | {
+                "before_executable_artifacts": True
+            }
+            expected_phase = "pre_lowering_semantic_gate"
+            expected_artifacts = False
+        comparisons = {
+            "phase": expected_phase,
+            "artifacts_claimed": expected_artifacts,
+            "semantic_oracle": expected_semantic,
+            "rejection": expected_rejection,
+            "backend": expected_backend,
+        }
+        for key, expected in comparisons.items():
+            if result.get(key) != expected:
+                raise ValueError(
+                    f"independent outcome recomputation drift: "
+                    f"{mutant_id}/{key}"
+                )
+        if set(result) != set(expected_core) | set(comparisons):
+            raise ValueError(f"result field set drift: {mutant_id}")
     return report
 
 
