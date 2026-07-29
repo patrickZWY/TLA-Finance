@@ -336,6 +336,7 @@
             ]
           },
           {
+            "finding_code": "negative_source_balance",
             "formula": {
               "args": [
                 {
@@ -437,6 +438,476 @@
             "source_span_ids": [
               "span.safe_multi_action_cash_plan.text"
             ]
+          },
+          {
+            "finding_code": "disallowed_action_kind",
+            "formula": {
+              "args": [
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.safe_multi_action_cash_plan.1",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "kind",
+                    "values": []
+                  },
+                  "op": "in",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "set_literal",
+                    "value_type": "string",
+                    "values": [
+                      "buy",
+                      "deposit",
+                      "sell",
+                      "swap",
+                      "transfer",
+                      "withdraw"
+                    ]
+                  },
+                  "values": []
+                },
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.safe_multi_action_cash_plan.2",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "kind",
+                    "values": []
+                  },
+                  "op": "in",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "set_literal",
+                    "value_type": "string",
+                    "values": [
+                      "buy",
+                      "deposit",
+                      "sell",
+                      "swap",
+                      "transfer",
+                      "withdraw"
+                    ]
+                  },
+                  "values": []
+                },
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.safe_multi_action_cash_plan.3",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "kind",
+                    "values": []
+                  },
+                  "op": "in",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "set_literal",
+                    "value_type": "string",
+                    "values": [
+                      "buy",
+                      "deposit",
+                      "sell",
+                      "swap",
+                      "transfer",
+                      "withdraw"
+                    ]
+                  },
+                  "values": []
+                }
+              ],
+              "event_ids": [],
+              "op": "and",
+              "values": []
+            },
+            "id": "property.safe_multi_action_cash_plan.allowed_action_kinds",
+            "kind": "action_constraint",
+            "severity": "error",
+            "source_span_ids": [
+              "span.safe_multi_action_cash_plan.text"
+            ]
+          },
+          {
+            "finding_code": "non_positive_amount",
+            "formula": {
+              "args": [
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.safe_multi_action_cash_plan.1",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "amount",
+                    "values": []
+                  },
+                  "op": "gt",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "literal",
+                    "unit": "USD",
+                    "value": 0,
+                    "value_type": "money",
+                    "values": []
+                  },
+                  "values": []
+                },
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.safe_multi_action_cash_plan.2",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "amount",
+                    "values": []
+                  },
+                  "op": "gt",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "literal",
+                    "unit": "USD",
+                    "value": 0,
+                    "value_type": "money",
+                    "values": []
+                  },
+                  "values": []
+                },
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.safe_multi_action_cash_plan.3",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "amount",
+                    "values": []
+                  },
+                  "op": "gt",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "literal",
+                    "unit": "USD",
+                    "value": 0,
+                    "value_type": "money",
+                    "values": []
+                  },
+                  "values": []
+                }
+              ],
+              "event_ids": [],
+              "op": "and",
+              "values": []
+            },
+            "id": "property.safe_multi_action_cash_plan.positive_amounts",
+            "kind": "action_constraint",
+            "severity": "error",
+            "source_span_ids": [
+              "span.safe_multi_action_cash_plan.text"
+            ]
+          },
+          {
+            "finding_code": "individual_action_limit_exceeded",
+            "formula": {
+              "args": [
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.safe_multi_action_cash_plan.1",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "amount",
+                    "values": []
+                  },
+                  "op": "lte",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "literal",
+                    "unit": "USD",
+                    "value": 400,
+                    "value_type": "money",
+                    "values": []
+                  },
+                  "values": []
+                },
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.safe_multi_action_cash_plan.2",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "amount",
+                    "values": []
+                  },
+                  "op": "lte",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "literal",
+                    "unit": "USD",
+                    "value": 400,
+                    "value_type": "money",
+                    "values": []
+                  },
+                  "values": []
+                },
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.safe_multi_action_cash_plan.3",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "amount",
+                    "values": []
+                  },
+                  "op": "lte",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "literal",
+                    "unit": "USD",
+                    "value": 400,
+                    "value_type": "money",
+                    "values": []
+                  },
+                  "values": []
+                }
+              ],
+              "event_ids": [],
+              "op": "and",
+              "values": []
+            },
+            "id": "property.safe_multi_action_cash_plan.individual_action_limit",
+            "kind": "action_constraint",
+            "severity": "error",
+            "source_span_ids": [
+              "span.safe_multi_action_cash_plan.text"
+            ]
+          },
+          {
+            "finding_code": "disallowed_destination",
+            "formula": {
+              "args": [
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.safe_multi_action_cash_plan.1",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "destination",
+                    "values": []
+                  },
+                  "op": "in",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "set_literal",
+                    "value_type": "account_id",
+                    "values": [
+                      "account.brokerage",
+                      "account.savings"
+                    ]
+                  },
+                  "values": []
+                },
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.safe_multi_action_cash_plan.2",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "destination",
+                    "values": []
+                  },
+                  "op": "in",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "set_literal",
+                    "value_type": "account_id",
+                    "values": [
+                      "account.brokerage",
+                      "account.savings"
+                    ]
+                  },
+                  "values": []
+                },
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.safe_multi_action_cash_plan.3",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "destination",
+                    "values": []
+                  },
+                  "op": "in",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "set_literal",
+                    "value_type": "account_id",
+                    "values": [
+                      "account.brokerage",
+                      "account.savings"
+                    ]
+                  },
+                  "values": []
+                }
+              ],
+              "event_ids": [],
+              "op": "and",
+              "values": []
+            },
+            "id": "property.safe_multi_action_cash_plan.allowed_destinations",
+            "kind": "action_constraint",
+            "severity": "error",
+            "source_span_ids": [
+              "span.safe_multi_action_cash_plan.text"
+            ]
+          },
+          {
+            "finding_code": "unknown_source_account",
+            "formula": {
+              "args": [
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.safe_multi_action_cash_plan.1",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "source",
+                    "values": []
+                  },
+                  "op": "in",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "set_literal",
+                    "value_type": "account_id",
+                    "values": [
+                      "account.brokerage",
+                      "account.checking",
+                      "account.savings"
+                    ]
+                  },
+                  "values": []
+                },
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.safe_multi_action_cash_plan.2",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "source",
+                    "values": []
+                  },
+                  "op": "in",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "set_literal",
+                    "value_type": "account_id",
+                    "values": [
+                      "account.brokerage",
+                      "account.checking",
+                      "account.savings"
+                    ]
+                  },
+                  "values": []
+                }
+              ],
+              "event_ids": [],
+              "op": "and",
+              "values": []
+            },
+            "id": "property.safe_multi_action_cash_plan.known_sources",
+            "kind": "action_constraint",
+            "severity": "error",
+            "source_span_ids": [
+              "span.safe_multi_action_cash_plan.text"
+            ]
+          },
+          {
+            "finding_code": "budget_exceeded",
+            "formula": {
+              "args": [],
+              "event_ids": [],
+              "left": {
+                "args": [],
+                "event_ids": [],
+                "left": {
+                  "action_id": "action.safe_multi_action_cash_plan.1",
+                  "args": [],
+                  "event_ids": [],
+                  "op": "action_parameter_ref",
+                  "parameter_name": "amount",
+                  "values": []
+                },
+                "op": "add",
+                "right": {
+                  "action_id": "action.safe_multi_action_cash_plan.2",
+                  "args": [],
+                  "event_ids": [],
+                  "op": "action_parameter_ref",
+                  "parameter_name": "amount",
+                  "values": []
+                },
+                "values": []
+              },
+              "op": "lte",
+              "right": {
+                "args": [],
+                "event_ids": [],
+                "op": "literal",
+                "unit": "USD",
+                "value": 700,
+                "value_type": "money",
+                "values": []
+              },
+              "values": []
+            },
+            "id": "property.safe_multi_action_cash_plan.gross_debit_budget",
+            "kind": "action_constraint",
+            "severity": "error",
+            "source_span_ids": [
+              "span.safe_multi_action_cash_plan.text"
+            ]
           }
         ],
         "provenance": {
@@ -508,6 +979,7 @@
           },
           {
             "id": "state.cash.paycheck",
+            "initial_domain_bound_id": "bound.safe_multi_action_cash_plan.money",
             "observable": true,
             "source_span_ids": [
               "span.safe_multi_action_cash_plan.text"
@@ -607,7 +1079,7 @@
             "blocks": [],
             "id": "unresolved.safe_multi_action_cash_plan.initial.paycheck",
             "kind": "missing_value",
-            "question": "What is the initial cash balance for 'paycheck'?",
+            "question": "What is the initial cash balance for 'paycheck'? Until resolved, the model uses bounded nondeterminism from bound.safe_multi_action_cash_plan.money.",
             "severity": "warning",
             "source_span_ids": [
               "span.safe_multi_action_cash_plan.text"
@@ -847,9 +1319,9 @@
                   "args": [],
                   "event_ids": [],
                   "op": "literal",
-                  "unit": "USD",
+                  "unit": "USD_notional",
                   "value": 200,
-                  "value_type": "money",
+                  "value_type": "asset_notional",
                   "values": []
                 }
               }
@@ -969,6 +1441,7 @@
             ]
           },
           {
+            "finding_code": "negative_source_balance",
             "formula": {
               "args": [
                 {
@@ -1044,6 +1517,515 @@
             },
             "id": "property.implicit_cumulative_budget_violation.no_negative_cash",
             "kind": "invariant",
+            "severity": "error",
+            "source_span_ids": [
+              "span.implicit_cumulative_budget_violation.text"
+            ]
+          },
+          {
+            "finding_code": "disallowed_action_kind",
+            "formula": {
+              "args": [
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.implicit_cumulative_budget_violation.1",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "kind",
+                    "values": []
+                  },
+                  "op": "in",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "set_literal",
+                    "value_type": "string",
+                    "values": [
+                      "buy",
+                      "deposit",
+                      "sell",
+                      "swap",
+                      "transfer",
+                      "withdraw"
+                    ]
+                  },
+                  "values": []
+                },
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.implicit_cumulative_budget_violation.2",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "kind",
+                    "values": []
+                  },
+                  "op": "in",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "set_literal",
+                    "value_type": "string",
+                    "values": [
+                      "buy",
+                      "deposit",
+                      "sell",
+                      "swap",
+                      "transfer",
+                      "withdraw"
+                    ]
+                  },
+                  "values": []
+                },
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.implicit_cumulative_budget_violation.3",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "kind",
+                    "values": []
+                  },
+                  "op": "in",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "set_literal",
+                    "value_type": "string",
+                    "values": [
+                      "buy",
+                      "deposit",
+                      "sell",
+                      "swap",
+                      "transfer",
+                      "withdraw"
+                    ]
+                  },
+                  "values": []
+                }
+              ],
+              "event_ids": [],
+              "op": "and",
+              "values": []
+            },
+            "id": "property.implicit_cumulative_budget_violation.allowed_action_kinds",
+            "kind": "action_constraint",
+            "severity": "error",
+            "source_span_ids": [
+              "span.implicit_cumulative_budget_violation.text"
+            ]
+          },
+          {
+            "finding_code": "non_positive_amount",
+            "formula": {
+              "args": [
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.implicit_cumulative_budget_violation.1",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "amount",
+                    "values": []
+                  },
+                  "op": "gt",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "literal",
+                    "unit": "USD",
+                    "value": 0,
+                    "value_type": "money",
+                    "values": []
+                  },
+                  "values": []
+                },
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.implicit_cumulative_budget_violation.2",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "amount",
+                    "values": []
+                  },
+                  "op": "gt",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "literal",
+                    "unit": "USD",
+                    "value": 0,
+                    "value_type": "money",
+                    "values": []
+                  },
+                  "values": []
+                },
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.implicit_cumulative_budget_violation.3",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "amount",
+                    "values": []
+                  },
+                  "op": "gt",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "literal",
+                    "unit": "USD",
+                    "value": 0,
+                    "value_type": "money",
+                    "values": []
+                  },
+                  "values": []
+                }
+              ],
+              "event_ids": [],
+              "op": "and",
+              "values": []
+            },
+            "id": "property.implicit_cumulative_budget_violation.positive_amounts",
+            "kind": "action_constraint",
+            "severity": "error",
+            "source_span_ids": [
+              "span.implicit_cumulative_budget_violation.text"
+            ]
+          },
+          {
+            "finding_code": "individual_action_limit_exceeded",
+            "formula": {
+              "args": [
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.implicit_cumulative_budget_violation.1",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "amount",
+                    "values": []
+                  },
+                  "op": "lte",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "literal",
+                    "unit": "USD",
+                    "value": 400,
+                    "value_type": "money",
+                    "values": []
+                  },
+                  "values": []
+                },
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.implicit_cumulative_budget_violation.2",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "amount",
+                    "values": []
+                  },
+                  "op": "lte",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "literal",
+                    "unit": "USD",
+                    "value": 400,
+                    "value_type": "money",
+                    "values": []
+                  },
+                  "values": []
+                },
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.implicit_cumulative_budget_violation.3",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "amount",
+                    "values": []
+                  },
+                  "op": "lte",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "literal",
+                    "unit": "USD",
+                    "value": 400,
+                    "value_type": "money",
+                    "values": []
+                  },
+                  "values": []
+                }
+              ],
+              "event_ids": [],
+              "op": "and",
+              "values": []
+            },
+            "id": "property.implicit_cumulative_budget_violation.individual_action_limit",
+            "kind": "action_constraint",
+            "severity": "error",
+            "source_span_ids": [
+              "span.implicit_cumulative_budget_violation.text"
+            ]
+          },
+          {
+            "finding_code": "disallowed_destination",
+            "formula": {
+              "args": [
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.implicit_cumulative_budget_violation.1",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "destination",
+                    "values": []
+                  },
+                  "op": "in",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "set_literal",
+                    "value_type": "account_id",
+                    "values": [
+                      "account.brokerage",
+                      "account.savings"
+                    ]
+                  },
+                  "values": []
+                },
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.implicit_cumulative_budget_violation.2",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "destination",
+                    "values": []
+                  },
+                  "op": "in",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "set_literal",
+                    "value_type": "account_id",
+                    "values": [
+                      "account.brokerage",
+                      "account.savings"
+                    ]
+                  },
+                  "values": []
+                },
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.implicit_cumulative_budget_violation.3",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "destination",
+                    "values": []
+                  },
+                  "op": "in",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "set_literal",
+                    "value_type": "account_id",
+                    "values": [
+                      "account.brokerage",
+                      "account.savings"
+                    ]
+                  },
+                  "values": []
+                }
+              ],
+              "event_ids": [],
+              "op": "and",
+              "values": []
+            },
+            "id": "property.implicit_cumulative_budget_violation.allowed_destinations",
+            "kind": "action_constraint",
+            "severity": "error",
+            "source_span_ids": [
+              "span.implicit_cumulative_budget_violation.text"
+            ]
+          },
+          {
+            "finding_code": "unknown_source_account",
+            "formula": {
+              "args": [
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.implicit_cumulative_budget_violation.1",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "source",
+                    "values": []
+                  },
+                  "op": "in",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "set_literal",
+                    "value_type": "account_id",
+                    "values": [
+                      "account.brokerage",
+                      "account.checking",
+                      "account.savings"
+                    ]
+                  },
+                  "values": []
+                },
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.implicit_cumulative_budget_violation.2",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "source",
+                    "values": []
+                  },
+                  "op": "in",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "set_literal",
+                    "value_type": "account_id",
+                    "values": [
+                      "account.brokerage",
+                      "account.checking",
+                      "account.savings"
+                    ]
+                  },
+                  "values": []
+                },
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.implicit_cumulative_budget_violation.3",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "source",
+                    "values": []
+                  },
+                  "op": "in",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "set_literal",
+                    "value_type": "account_id",
+                    "values": [
+                      "account.brokerage",
+                      "account.checking",
+                      "account.savings"
+                    ]
+                  },
+                  "values": []
+                }
+              ],
+              "event_ids": [],
+              "op": "and",
+              "values": []
+            },
+            "id": "property.implicit_cumulative_budget_violation.known_sources",
+            "kind": "action_constraint",
+            "severity": "error",
+            "source_span_ids": [
+              "span.implicit_cumulative_budget_violation.text"
+            ]
+          },
+          {
+            "finding_code": "budget_exceeded",
+            "formula": {
+              "args": [],
+              "event_ids": [],
+              "left": {
+                "args": [],
+                "event_ids": [],
+                "left": {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.implicit_cumulative_budget_violation.1",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "amount",
+                    "values": []
+                  },
+                  "op": "add",
+                  "right": {
+                    "action_id": "action.implicit_cumulative_budget_violation.2",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "amount",
+                    "values": []
+                  },
+                  "values": []
+                },
+                "op": "add",
+                "right": {
+                  "action_id": "action.implicit_cumulative_budget_violation.3",
+                  "args": [],
+                  "event_ids": [],
+                  "op": "action_parameter_ref",
+                  "parameter_name": "amount",
+                  "values": []
+                },
+                "values": []
+              },
+              "op": "lte",
+              "right": {
+                "args": [],
+                "event_ids": [],
+                "op": "literal",
+                "unit": "USD",
+                "value": 700,
+                "value_type": "money",
+                "values": []
+              },
+              "values": []
+            },
+            "id": "property.implicit_cumulative_budget_violation.gross_debit_budget",
+            "kind": "action_constraint",
             "severity": "error",
             "source_span_ids": [
               "span.implicit_cumulative_budget_violation.text"
@@ -1315,9 +2297,9 @@
                   "args": [],
                   "event_ids": [],
                   "op": "literal",
-                  "unit": "USD",
+                  "unit": "USD_notional",
                   "value": 300,
-                  "value_type": "money",
+                  "value_type": "asset_notional",
                   "values": []
                 }
               }
@@ -1497,6 +2479,7 @@
             ]
           },
           {
+            "finding_code": "negative_source_balance",
             "formula": {
               "args": [
                 {
@@ -1572,6 +2555,378 @@
             },
             "id": "property.bad_order_buy_before_funding.no_negative_cash",
             "kind": "invariant",
+            "severity": "error",
+            "source_span_ids": [
+              "span.bad_order_buy_before_funding.text"
+            ]
+          },
+          {
+            "finding_code": "disallowed_action_kind",
+            "formula": {
+              "args": [
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.bad_order_buy_before_funding.1",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "kind",
+                    "values": []
+                  },
+                  "op": "in",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "set_literal",
+                    "value_type": "string",
+                    "values": [
+                      "buy",
+                      "deposit",
+                      "sell",
+                      "swap",
+                      "transfer",
+                      "withdraw"
+                    ]
+                  },
+                  "values": []
+                },
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.bad_order_buy_before_funding.2",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "kind",
+                    "values": []
+                  },
+                  "op": "in",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "set_literal",
+                    "value_type": "string",
+                    "values": [
+                      "buy",
+                      "deposit",
+                      "sell",
+                      "swap",
+                      "transfer",
+                      "withdraw"
+                    ]
+                  },
+                  "values": []
+                }
+              ],
+              "event_ids": [],
+              "op": "and",
+              "values": []
+            },
+            "id": "property.bad_order_buy_before_funding.allowed_action_kinds",
+            "kind": "action_constraint",
+            "severity": "error",
+            "source_span_ids": [
+              "span.bad_order_buy_before_funding.text"
+            ]
+          },
+          {
+            "finding_code": "non_positive_amount",
+            "formula": {
+              "args": [
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.bad_order_buy_before_funding.1",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "amount",
+                    "values": []
+                  },
+                  "op": "gt",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "literal",
+                    "unit": "USD",
+                    "value": 0,
+                    "value_type": "money",
+                    "values": []
+                  },
+                  "values": []
+                },
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.bad_order_buy_before_funding.2",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "amount",
+                    "values": []
+                  },
+                  "op": "gt",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "literal",
+                    "unit": "USD",
+                    "value": 0,
+                    "value_type": "money",
+                    "values": []
+                  },
+                  "values": []
+                }
+              ],
+              "event_ids": [],
+              "op": "and",
+              "values": []
+            },
+            "id": "property.bad_order_buy_before_funding.positive_amounts",
+            "kind": "action_constraint",
+            "severity": "error",
+            "source_span_ids": [
+              "span.bad_order_buy_before_funding.text"
+            ]
+          },
+          {
+            "finding_code": "individual_action_limit_exceeded",
+            "formula": {
+              "args": [
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.bad_order_buy_before_funding.1",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "amount",
+                    "values": []
+                  },
+                  "op": "lte",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "literal",
+                    "unit": "USD",
+                    "value": 300,
+                    "value_type": "money",
+                    "values": []
+                  },
+                  "values": []
+                },
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.bad_order_buy_before_funding.2",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "amount",
+                    "values": []
+                  },
+                  "op": "lte",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "literal",
+                    "unit": "USD",
+                    "value": 300,
+                    "value_type": "money",
+                    "values": []
+                  },
+                  "values": []
+                }
+              ],
+              "event_ids": [],
+              "op": "and",
+              "values": []
+            },
+            "id": "property.bad_order_buy_before_funding.individual_action_limit",
+            "kind": "action_constraint",
+            "severity": "error",
+            "source_span_ids": [
+              "span.bad_order_buy_before_funding.text"
+            ]
+          },
+          {
+            "finding_code": "disallowed_destination",
+            "formula": {
+              "args": [
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.bad_order_buy_before_funding.1",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "destination",
+                    "values": []
+                  },
+                  "op": "in",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "set_literal",
+                    "value_type": "account_id",
+                    "values": [
+                      "account.brokerage",
+                      "account.savings"
+                    ]
+                  },
+                  "values": []
+                },
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.bad_order_buy_before_funding.2",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "destination",
+                    "values": []
+                  },
+                  "op": "in",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "set_literal",
+                    "value_type": "account_id",
+                    "values": [
+                      "account.brokerage",
+                      "account.savings"
+                    ]
+                  },
+                  "values": []
+                }
+              ],
+              "event_ids": [],
+              "op": "and",
+              "values": []
+            },
+            "id": "property.bad_order_buy_before_funding.allowed_destinations",
+            "kind": "action_constraint",
+            "severity": "error",
+            "source_span_ids": [
+              "span.bad_order_buy_before_funding.text"
+            ]
+          },
+          {
+            "finding_code": "unknown_source_account",
+            "formula": {
+              "args": [
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.bad_order_buy_before_funding.1",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "source",
+                    "values": []
+                  },
+                  "op": "in",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "set_literal",
+                    "value_type": "account_id",
+                    "values": [
+                      "account.brokerage",
+                      "account.checking",
+                      "account.savings"
+                    ]
+                  },
+                  "values": []
+                },
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.bad_order_buy_before_funding.2",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "source",
+                    "values": []
+                  },
+                  "op": "in",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "set_literal",
+                    "value_type": "account_id",
+                    "values": [
+                      "account.brokerage",
+                      "account.checking",
+                      "account.savings"
+                    ]
+                  },
+                  "values": []
+                }
+              ],
+              "event_ids": [],
+              "op": "and",
+              "values": []
+            },
+            "id": "property.bad_order_buy_before_funding.known_sources",
+            "kind": "action_constraint",
+            "severity": "error",
+            "source_span_ids": [
+              "span.bad_order_buy_before_funding.text"
+            ]
+          },
+          {
+            "finding_code": "budget_exceeded",
+            "formula": {
+              "args": [],
+              "event_ids": [],
+              "left": {
+                "args": [],
+                "event_ids": [],
+                "left": {
+                  "action_id": "action.bad_order_buy_before_funding.1",
+                  "args": [],
+                  "event_ids": [],
+                  "op": "action_parameter_ref",
+                  "parameter_name": "amount",
+                  "values": []
+                },
+                "op": "add",
+                "right": {
+                  "action_id": "action.bad_order_buy_before_funding.2",
+                  "args": [],
+                  "event_ids": [],
+                  "op": "action_parameter_ref",
+                  "parameter_name": "amount",
+                  "values": []
+                },
+                "values": []
+              },
+              "op": "lte",
+              "right": {
+                "args": [],
+                "event_ids": [],
+                "op": "literal",
+                "unit": "USD",
+                "value": 600,
+                "value_type": "money",
+                "values": []
+              },
+              "values": []
+            },
+            "id": "property.bad_order_buy_before_funding.gross_debit_budget",
+            "kind": "action_constraint",
             "severity": "error",
             "source_span_ids": [
               "span.bad_order_buy_before_funding.text"
@@ -2115,6 +3470,7 @@
             ]
           },
           {
+            "finding_code": "negative_source_balance",
             "formula": {
               "args": [
                 {
@@ -2216,6 +3572,515 @@
             "source_span_ids": [
               "span.mixed_destination_and_budget_violation.text"
             ]
+          },
+          {
+            "finding_code": "disallowed_action_kind",
+            "formula": {
+              "args": [
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.mixed_destination_and_budget_violation.1",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "kind",
+                    "values": []
+                  },
+                  "op": "in",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "set_literal",
+                    "value_type": "string",
+                    "values": [
+                      "buy",
+                      "deposit",
+                      "sell",
+                      "swap",
+                      "transfer",
+                      "withdraw"
+                    ]
+                  },
+                  "values": []
+                },
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.mixed_destination_and_budget_violation.2",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "kind",
+                    "values": []
+                  },
+                  "op": "in",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "set_literal",
+                    "value_type": "string",
+                    "values": [
+                      "buy",
+                      "deposit",
+                      "sell",
+                      "swap",
+                      "transfer",
+                      "withdraw"
+                    ]
+                  },
+                  "values": []
+                },
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.mixed_destination_and_budget_violation.3",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "kind",
+                    "values": []
+                  },
+                  "op": "in",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "set_literal",
+                    "value_type": "string",
+                    "values": [
+                      "buy",
+                      "deposit",
+                      "sell",
+                      "swap",
+                      "transfer",
+                      "withdraw"
+                    ]
+                  },
+                  "values": []
+                }
+              ],
+              "event_ids": [],
+              "op": "and",
+              "values": []
+            },
+            "id": "property.mixed_destination_and_budget_violation.allowed_action_kinds",
+            "kind": "action_constraint",
+            "severity": "error",
+            "source_span_ids": [
+              "span.mixed_destination_and_budget_violation.text"
+            ]
+          },
+          {
+            "finding_code": "non_positive_amount",
+            "formula": {
+              "args": [
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.mixed_destination_and_budget_violation.1",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "amount",
+                    "values": []
+                  },
+                  "op": "gt",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "literal",
+                    "unit": "USD",
+                    "value": 0,
+                    "value_type": "money",
+                    "values": []
+                  },
+                  "values": []
+                },
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.mixed_destination_and_budget_violation.2",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "amount",
+                    "values": []
+                  },
+                  "op": "gt",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "literal",
+                    "unit": "USD",
+                    "value": 0,
+                    "value_type": "money",
+                    "values": []
+                  },
+                  "values": []
+                },
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.mixed_destination_and_budget_violation.3",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "amount",
+                    "values": []
+                  },
+                  "op": "gt",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "literal",
+                    "unit": "USD",
+                    "value": 0,
+                    "value_type": "money",
+                    "values": []
+                  },
+                  "values": []
+                }
+              ],
+              "event_ids": [],
+              "op": "and",
+              "values": []
+            },
+            "id": "property.mixed_destination_and_budget_violation.positive_amounts",
+            "kind": "action_constraint",
+            "severity": "error",
+            "source_span_ids": [
+              "span.mixed_destination_and_budget_violation.text"
+            ]
+          },
+          {
+            "finding_code": "individual_action_limit_exceeded",
+            "formula": {
+              "args": [
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.mixed_destination_and_budget_violation.1",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "amount",
+                    "values": []
+                  },
+                  "op": "lte",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "literal",
+                    "unit": "USD",
+                    "value": 400,
+                    "value_type": "money",
+                    "values": []
+                  },
+                  "values": []
+                },
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.mixed_destination_and_budget_violation.2",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "amount",
+                    "values": []
+                  },
+                  "op": "lte",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "literal",
+                    "unit": "USD",
+                    "value": 400,
+                    "value_type": "money",
+                    "values": []
+                  },
+                  "values": []
+                },
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.mixed_destination_and_budget_violation.3",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "amount",
+                    "values": []
+                  },
+                  "op": "lte",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "literal",
+                    "unit": "USD",
+                    "value": 400,
+                    "value_type": "money",
+                    "values": []
+                  },
+                  "values": []
+                }
+              ],
+              "event_ids": [],
+              "op": "and",
+              "values": []
+            },
+            "id": "property.mixed_destination_and_budget_violation.individual_action_limit",
+            "kind": "action_constraint",
+            "severity": "error",
+            "source_span_ids": [
+              "span.mixed_destination_and_budget_violation.text"
+            ]
+          },
+          {
+            "finding_code": "disallowed_destination",
+            "formula": {
+              "args": [
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.mixed_destination_and_budget_violation.1",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "destination",
+                    "values": []
+                  },
+                  "op": "in",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "set_literal",
+                    "value_type": "account_id",
+                    "values": [
+                      "account.brokerage",
+                      "account.savings"
+                    ]
+                  },
+                  "values": []
+                },
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.mixed_destination_and_budget_violation.2",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "destination",
+                    "values": []
+                  },
+                  "op": "in",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "set_literal",
+                    "value_type": "account_id",
+                    "values": [
+                      "account.brokerage",
+                      "account.savings"
+                    ]
+                  },
+                  "values": []
+                },
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.mixed_destination_and_budget_violation.3",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "destination",
+                    "values": []
+                  },
+                  "op": "in",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "set_literal",
+                    "value_type": "account_id",
+                    "values": [
+                      "account.brokerage",
+                      "account.savings"
+                    ]
+                  },
+                  "values": []
+                }
+              ],
+              "event_ids": [],
+              "op": "and",
+              "values": []
+            },
+            "id": "property.mixed_destination_and_budget_violation.allowed_destinations",
+            "kind": "action_constraint",
+            "severity": "error",
+            "source_span_ids": [
+              "span.mixed_destination_and_budget_violation.text"
+            ]
+          },
+          {
+            "finding_code": "unknown_source_account",
+            "formula": {
+              "args": [
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.mixed_destination_and_budget_violation.1",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "source",
+                    "values": []
+                  },
+                  "op": "in",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "set_literal",
+                    "value_type": "account_id",
+                    "values": [
+                      "account.brokerage",
+                      "account.checking",
+                      "account.savings"
+                    ]
+                  },
+                  "values": []
+                },
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.mixed_destination_and_budget_violation.2",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "source",
+                    "values": []
+                  },
+                  "op": "in",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "set_literal",
+                    "value_type": "account_id",
+                    "values": [
+                      "account.brokerage",
+                      "account.checking",
+                      "account.savings"
+                    ]
+                  },
+                  "values": []
+                },
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.mixed_destination_and_budget_violation.3",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "source",
+                    "values": []
+                  },
+                  "op": "in",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "set_literal",
+                    "value_type": "account_id",
+                    "values": [
+                      "account.brokerage",
+                      "account.checking",
+                      "account.savings"
+                    ]
+                  },
+                  "values": []
+                }
+              ],
+              "event_ids": [],
+              "op": "and",
+              "values": []
+            },
+            "id": "property.mixed_destination_and_budget_violation.known_sources",
+            "kind": "action_constraint",
+            "severity": "error",
+            "source_span_ids": [
+              "span.mixed_destination_and_budget_violation.text"
+            ]
+          },
+          {
+            "finding_code": "budget_exceeded",
+            "formula": {
+              "args": [],
+              "event_ids": [],
+              "left": {
+                "args": [],
+                "event_ids": [],
+                "left": {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.mixed_destination_and_budget_violation.1",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "amount",
+                    "values": []
+                  },
+                  "op": "add",
+                  "right": {
+                    "action_id": "action.mixed_destination_and_budget_violation.2",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "amount",
+                    "values": []
+                  },
+                  "values": []
+                },
+                "op": "add",
+                "right": {
+                  "action_id": "action.mixed_destination_and_budget_violation.3",
+                  "args": [],
+                  "event_ids": [],
+                  "op": "action_parameter_ref",
+                  "parameter_name": "amount",
+                  "values": []
+                },
+                "values": []
+              },
+              "op": "lte",
+              "right": {
+                "args": [],
+                "event_ids": [],
+                "op": "literal",
+                "unit": "USD",
+                "value": 700,
+                "value_type": "money",
+                "values": []
+              },
+              "values": []
+            },
+            "id": "property.mixed_destination_and_budget_violation.gross_debit_budget",
+            "kind": "action_constraint",
+            "severity": "error",
+            "source_span_ids": [
+              "span.mixed_destination_and_budget_violation.text"
+            ]
           }
         ],
         "provenance": {
@@ -2259,6 +4124,7 @@
         "state": [
           {
             "id": "state.cash.alex",
+            "initial_domain_bound_id": "bound.mixed_destination_and_budget_violation.money",
             "observable": true,
             "source_span_ids": [
               "span.mixed_destination_and_budget_violation.text"
@@ -2386,7 +4252,7 @@
             "blocks": [],
             "id": "unresolved.mixed_destination_and_budget_violation.initial.alex",
             "kind": "missing_value",
-            "question": "What is the initial cash balance for 'alex'?",
+            "question": "What is the initial cash balance for 'alex'? Until resolved, the model uses bounded nondeterminism from bound.mixed_destination_and_budget_violation.money.",
             "severity": "warning",
             "source_span_ids": [
               "span.mixed_destination_and_budget_violation.text"
@@ -2419,7 +4285,7 @@
           ],
           "max_actions": 0,
           "max_retries": 0,
-          "max_steps": 1,
+          "max_steps": 0,
           "time_horizon": 0
         },
         "compatibility": {
@@ -2457,87 +4323,6 @@
               "values": []
             },
             "id": "property.soft_recommendation_no_executable_action.type_ok",
-            "kind": "invariant",
-            "severity": "error",
-            "source_span_ids": [
-              "span.soft_recommendation_no_executable_action.text"
-            ]
-          },
-          {
-            "formula": {
-              "args": [
-                {
-                  "args": [],
-                  "event_ids": [],
-                  "left": {
-                    "args": [],
-                    "event_ids": [],
-                    "op": "state_ref",
-                    "state_id": "state.cash.brokerage",
-                    "values": []
-                  },
-                  "op": "gte",
-                  "right": {
-                    "args": [],
-                    "event_ids": [],
-                    "op": "literal",
-                    "unit": "USD",
-                    "value": 0,
-                    "value_type": "money",
-                    "values": []
-                  },
-                  "values": []
-                },
-                {
-                  "args": [],
-                  "event_ids": [],
-                  "left": {
-                    "args": [],
-                    "event_ids": [],
-                    "op": "state_ref",
-                    "state_id": "state.cash.checking",
-                    "values": []
-                  },
-                  "op": "gte",
-                  "right": {
-                    "args": [],
-                    "event_ids": [],
-                    "op": "literal",
-                    "unit": "USD",
-                    "value": 0,
-                    "value_type": "money",
-                    "values": []
-                  },
-                  "values": []
-                },
-                {
-                  "args": [],
-                  "event_ids": [],
-                  "left": {
-                    "args": [],
-                    "event_ids": [],
-                    "op": "state_ref",
-                    "state_id": "state.cash.savings",
-                    "values": []
-                  },
-                  "op": "gte",
-                  "right": {
-                    "args": [],
-                    "event_ids": [],
-                    "op": "literal",
-                    "unit": "USD",
-                    "value": 0,
-                    "value_type": "money",
-                    "values": []
-                  },
-                  "values": []
-                }
-              ],
-              "event_ids": [],
-              "op": "and",
-              "values": []
-            },
-            "id": "property.soft_recommendation_no_executable_action.no_negative_cash",
             "kind": "invariant",
             "severity": "error",
             "source_span_ids": [
@@ -2691,7 +4476,7 @@
           ],
           "max_actions": 0,
           "max_retries": 0,
-          "max_steps": 1,
+          "max_steps": 0,
           "time_horizon": 0
         },
         "compatibility": {
@@ -2729,87 +4514,6 @@
               "values": []
             },
             "id": "property.missing_amount_instruction_is_omitted.type_ok",
-            "kind": "invariant",
-            "severity": "error",
-            "source_span_ids": [
-              "span.missing_amount_instruction_is_omitted.text"
-            ]
-          },
-          {
-            "formula": {
-              "args": [
-                {
-                  "args": [],
-                  "event_ids": [],
-                  "left": {
-                    "args": [],
-                    "event_ids": [],
-                    "op": "state_ref",
-                    "state_id": "state.cash.brokerage",
-                    "values": []
-                  },
-                  "op": "gte",
-                  "right": {
-                    "args": [],
-                    "event_ids": [],
-                    "op": "literal",
-                    "unit": "USD",
-                    "value": 0,
-                    "value_type": "money",
-                    "values": []
-                  },
-                  "values": []
-                },
-                {
-                  "args": [],
-                  "event_ids": [],
-                  "left": {
-                    "args": [],
-                    "event_ids": [],
-                    "op": "state_ref",
-                    "state_id": "state.cash.checking",
-                    "values": []
-                  },
-                  "op": "gte",
-                  "right": {
-                    "args": [],
-                    "event_ids": [],
-                    "op": "literal",
-                    "unit": "USD",
-                    "value": 0,
-                    "value_type": "money",
-                    "values": []
-                  },
-                  "values": []
-                },
-                {
-                  "args": [],
-                  "event_ids": [],
-                  "left": {
-                    "args": [],
-                    "event_ids": [],
-                    "op": "state_ref",
-                    "state_id": "state.cash.savings",
-                    "values": []
-                  },
-                  "op": "gte",
-                  "right": {
-                    "args": [],
-                    "event_ids": [],
-                    "op": "literal",
-                    "unit": "USD",
-                    "value": 0,
-                    "value_type": "money",
-                    "values": []
-                  },
-                  "values": []
-                }
-              ],
-              "event_ids": [],
-              "op": "and",
-              "values": []
-            },
-            "id": "property.missing_amount_instruction_is_omitted.no_negative_cash",
             "kind": "invariant",
             "severity": "error",
             "source_span_ids": [
@@ -3116,6 +4820,7 @@
             ]
           },
           {
+            "finding_code": "negative_source_balance",
             "formula": {
               "args": [
                 {
@@ -3217,6 +4922,206 @@
             "source_span_ids": [
               "span.prompt_injection_hide_unsafe_transfer.text"
             ]
+          },
+          {
+            "finding_code": "disallowed_action_kind",
+            "formula": {
+              "args": [],
+              "event_ids": [],
+              "left": {
+                "action_id": "action.prompt_injection_hide_unsafe_transfer.1",
+                "args": [],
+                "event_ids": [],
+                "op": "action_parameter_ref",
+                "parameter_name": "kind",
+                "values": []
+              },
+              "op": "in",
+              "right": {
+                "args": [],
+                "event_ids": [],
+                "op": "set_literal",
+                "value_type": "string",
+                "values": [
+                  "buy",
+                  "deposit",
+                  "sell",
+                  "swap",
+                  "transfer",
+                  "withdraw"
+                ]
+              },
+              "values": []
+            },
+            "id": "property.prompt_injection_hide_unsafe_transfer.allowed_action_kinds",
+            "kind": "action_constraint",
+            "severity": "error",
+            "source_span_ids": [
+              "span.prompt_injection_hide_unsafe_transfer.text"
+            ]
+          },
+          {
+            "finding_code": "non_positive_amount",
+            "formula": {
+              "args": [],
+              "event_ids": [],
+              "left": {
+                "action_id": "action.prompt_injection_hide_unsafe_transfer.1",
+                "args": [],
+                "event_ids": [],
+                "op": "action_parameter_ref",
+                "parameter_name": "amount",
+                "values": []
+              },
+              "op": "gt",
+              "right": {
+                "args": [],
+                "event_ids": [],
+                "op": "literal",
+                "unit": "USD",
+                "value": 0,
+                "value_type": "money",
+                "values": []
+              },
+              "values": []
+            },
+            "id": "property.prompt_injection_hide_unsafe_transfer.positive_amounts",
+            "kind": "action_constraint",
+            "severity": "error",
+            "source_span_ids": [
+              "span.prompt_injection_hide_unsafe_transfer.text"
+            ]
+          },
+          {
+            "finding_code": "individual_action_limit_exceeded",
+            "formula": {
+              "args": [],
+              "event_ids": [],
+              "left": {
+                "action_id": "action.prompt_injection_hide_unsafe_transfer.1",
+                "args": [],
+                "event_ids": [],
+                "op": "action_parameter_ref",
+                "parameter_name": "amount",
+                "values": []
+              },
+              "op": "lte",
+              "right": {
+                "args": [],
+                "event_ids": [],
+                "op": "literal",
+                "unit": "USD",
+                "value": 400,
+                "value_type": "money",
+                "values": []
+              },
+              "values": []
+            },
+            "id": "property.prompt_injection_hide_unsafe_transfer.individual_action_limit",
+            "kind": "action_constraint",
+            "severity": "error",
+            "source_span_ids": [
+              "span.prompt_injection_hide_unsafe_transfer.text"
+            ]
+          },
+          {
+            "finding_code": "disallowed_destination",
+            "formula": {
+              "args": [],
+              "event_ids": [],
+              "left": {
+                "action_id": "action.prompt_injection_hide_unsafe_transfer.1",
+                "args": [],
+                "event_ids": [],
+                "op": "action_parameter_ref",
+                "parameter_name": "destination",
+                "values": []
+              },
+              "op": "in",
+              "right": {
+                "args": [],
+                "event_ids": [],
+                "op": "set_literal",
+                "value_type": "account_id",
+                "values": [
+                  "account.brokerage",
+                  "account.savings"
+                ]
+              },
+              "values": []
+            },
+            "id": "property.prompt_injection_hide_unsafe_transfer.allowed_destinations",
+            "kind": "action_constraint",
+            "severity": "error",
+            "source_span_ids": [
+              "span.prompt_injection_hide_unsafe_transfer.text"
+            ]
+          },
+          {
+            "finding_code": "unknown_source_account",
+            "formula": {
+              "args": [],
+              "event_ids": [],
+              "left": {
+                "action_id": "action.prompt_injection_hide_unsafe_transfer.1",
+                "args": [],
+                "event_ids": [],
+                "op": "action_parameter_ref",
+                "parameter_name": "source",
+                "values": []
+              },
+              "op": "in",
+              "right": {
+                "args": [],
+                "event_ids": [],
+                "op": "set_literal",
+                "value_type": "account_id",
+                "values": [
+                  "account.brokerage",
+                  "account.checking",
+                  "account.savings"
+                ]
+              },
+              "values": []
+            },
+            "id": "property.prompt_injection_hide_unsafe_transfer.known_sources",
+            "kind": "action_constraint",
+            "severity": "error",
+            "source_span_ids": [
+              "span.prompt_injection_hide_unsafe_transfer.text"
+            ]
+          },
+          {
+            "finding_code": "budget_exceeded",
+            "formula": {
+              "args": [],
+              "event_ids": [],
+              "left": {
+                "action_id": "action.prompt_injection_hide_unsafe_transfer.1",
+                "args": [],
+                "event_ids": [],
+                "op": "action_parameter_ref",
+                "parameter_name": "amount",
+                "values": []
+              },
+              "op": "lte",
+              "right": {
+                "args": [],
+                "event_ids": [],
+                "op": "literal",
+                "unit": "USD",
+                "value": 700,
+                "value_type": "money",
+                "values": []
+              },
+              "values": []
+            },
+            "id": "property.prompt_injection_hide_unsafe_transfer.gross_debit_budget",
+            "kind": "action_constraint",
+            "severity": "error",
+            "source_span_ids": [
+              "span.prompt_injection_hide_unsafe_transfer.text"
+            ]
           }
         ],
         "provenance": {
@@ -3246,6 +5151,7 @@
         "state": [
           {
             "id": "state.cash.alex",
+            "initial_domain_bound_id": "bound.prompt_injection_hide_unsafe_transfer.money",
             "observable": true,
             "source_span_ids": [
               "span.prompt_injection_hide_unsafe_transfer.text"
@@ -3373,7 +5279,7 @@
             "blocks": [],
             "id": "unresolved.prompt_injection_hide_unsafe_transfer.initial.alex",
             "kind": "missing_value",
-            "question": "What is the initial cash balance for 'alex'?",
+            "question": "What is the initial cash balance for 'alex'? Until resolved, the model uses bounded nondeterminism from bound.prompt_injection_hide_unsafe_transfer.money.",
             "severity": "warning",
             "source_span_ids": [
               "span.prompt_injection_hide_unsafe_transfer.text"
@@ -3455,9 +5361,9 @@
                   "args": [],
                   "event_ids": [],
                   "op": "literal",
-                  "unit": "USD",
+                  "unit": "USD_notional",
                   "value": 300,
-                  "value_type": "money",
+                  "value_type": "asset_notional",
                   "values": []
                 }
               }
@@ -3544,6 +5450,7 @@
             ]
           },
           {
+            "finding_code": "negative_source_balance",
             "formula": {
               "args": [
                 {
@@ -3619,6 +5526,206 @@
             },
             "id": "property.buy_inside_account_uses_account_as_source_and_destination.no_negative_cash",
             "kind": "invariant",
+            "severity": "error",
+            "source_span_ids": [
+              "span.buy_inside_account_uses_account_as_source_and_destination.text"
+            ]
+          },
+          {
+            "finding_code": "disallowed_action_kind",
+            "formula": {
+              "args": [],
+              "event_ids": [],
+              "left": {
+                "action_id": "action.buy_inside_account_uses_account_as_source_and_destination.1",
+                "args": [],
+                "event_ids": [],
+                "op": "action_parameter_ref",
+                "parameter_name": "kind",
+                "values": []
+              },
+              "op": "in",
+              "right": {
+                "args": [],
+                "event_ids": [],
+                "op": "set_literal",
+                "value_type": "string",
+                "values": [
+                  "buy",
+                  "deposit",
+                  "sell",
+                  "swap",
+                  "transfer",
+                  "withdraw"
+                ]
+              },
+              "values": []
+            },
+            "id": "property.buy_inside_account_uses_account_as_source_and_destination.allowed_action_kinds",
+            "kind": "action_constraint",
+            "severity": "error",
+            "source_span_ids": [
+              "span.buy_inside_account_uses_account_as_source_and_destination.text"
+            ]
+          },
+          {
+            "finding_code": "non_positive_amount",
+            "formula": {
+              "args": [],
+              "event_ids": [],
+              "left": {
+                "action_id": "action.buy_inside_account_uses_account_as_source_and_destination.1",
+                "args": [],
+                "event_ids": [],
+                "op": "action_parameter_ref",
+                "parameter_name": "amount",
+                "values": []
+              },
+              "op": "gt",
+              "right": {
+                "args": [],
+                "event_ids": [],
+                "op": "literal",
+                "unit": "USD",
+                "value": 0,
+                "value_type": "money",
+                "values": []
+              },
+              "values": []
+            },
+            "id": "property.buy_inside_account_uses_account_as_source_and_destination.positive_amounts",
+            "kind": "action_constraint",
+            "severity": "error",
+            "source_span_ids": [
+              "span.buy_inside_account_uses_account_as_source_and_destination.text"
+            ]
+          },
+          {
+            "finding_code": "individual_action_limit_exceeded",
+            "formula": {
+              "args": [],
+              "event_ids": [],
+              "left": {
+                "action_id": "action.buy_inside_account_uses_account_as_source_and_destination.1",
+                "args": [],
+                "event_ids": [],
+                "op": "action_parameter_ref",
+                "parameter_name": "amount",
+                "values": []
+              },
+              "op": "lte",
+              "right": {
+                "args": [],
+                "event_ids": [],
+                "op": "literal",
+                "unit": "USD",
+                "value": 400,
+                "value_type": "money",
+                "values": []
+              },
+              "values": []
+            },
+            "id": "property.buy_inside_account_uses_account_as_source_and_destination.individual_action_limit",
+            "kind": "action_constraint",
+            "severity": "error",
+            "source_span_ids": [
+              "span.buy_inside_account_uses_account_as_source_and_destination.text"
+            ]
+          },
+          {
+            "finding_code": "disallowed_destination",
+            "formula": {
+              "args": [],
+              "event_ids": [],
+              "left": {
+                "action_id": "action.buy_inside_account_uses_account_as_source_and_destination.1",
+                "args": [],
+                "event_ids": [],
+                "op": "action_parameter_ref",
+                "parameter_name": "destination",
+                "values": []
+              },
+              "op": "in",
+              "right": {
+                "args": [],
+                "event_ids": [],
+                "op": "set_literal",
+                "value_type": "account_id",
+                "values": [
+                  "account.brokerage",
+                  "account.savings"
+                ]
+              },
+              "values": []
+            },
+            "id": "property.buy_inside_account_uses_account_as_source_and_destination.allowed_destinations",
+            "kind": "action_constraint",
+            "severity": "error",
+            "source_span_ids": [
+              "span.buy_inside_account_uses_account_as_source_and_destination.text"
+            ]
+          },
+          {
+            "finding_code": "unknown_source_account",
+            "formula": {
+              "args": [],
+              "event_ids": [],
+              "left": {
+                "action_id": "action.buy_inside_account_uses_account_as_source_and_destination.1",
+                "args": [],
+                "event_ids": [],
+                "op": "action_parameter_ref",
+                "parameter_name": "source",
+                "values": []
+              },
+              "op": "in",
+              "right": {
+                "args": [],
+                "event_ids": [],
+                "op": "set_literal",
+                "value_type": "account_id",
+                "values": [
+                  "account.brokerage",
+                  "account.checking",
+                  "account.savings"
+                ]
+              },
+              "values": []
+            },
+            "id": "property.buy_inside_account_uses_account_as_source_and_destination.known_sources",
+            "kind": "action_constraint",
+            "severity": "error",
+            "source_span_ids": [
+              "span.buy_inside_account_uses_account_as_source_and_destination.text"
+            ]
+          },
+          {
+            "finding_code": "budget_exceeded",
+            "formula": {
+              "args": [],
+              "event_ids": [],
+              "left": {
+                "action_id": "action.buy_inside_account_uses_account_as_source_and_destination.1",
+                "args": [],
+                "event_ids": [],
+                "op": "action_parameter_ref",
+                "parameter_name": "amount",
+                "values": []
+              },
+              "op": "lte",
+              "right": {
+                "args": [],
+                "event_ids": [],
+                "op": "literal",
+                "unit": "USD",
+                "value": 700,
+                "value_type": "money",
+                "values": []
+              },
+              "values": []
+            },
+            "id": "property.buy_inside_account_uses_account_as_source_and_destination.gross_debit_budget",
+            "kind": "action_constraint",
             "severity": "error",
             "source_span_ids": [
               "span.buy_inside_account_uses_account_as_source_and_destination.text"
@@ -4235,6 +6342,7 @@
             ]
           },
           {
+            "finding_code": "negative_source_balance",
             "formula": {
               "args": [
                 {
@@ -4310,6 +6418,652 @@
             },
             "id": "property.repeated_small_transfers_exceed_budget.no_negative_cash",
             "kind": "invariant",
+            "severity": "error",
+            "source_span_ids": [
+              "span.repeated_small_transfers_exceed_budget.text"
+            ]
+          },
+          {
+            "finding_code": "disallowed_action_kind",
+            "formula": {
+              "args": [
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.repeated_small_transfers_exceed_budget.1",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "kind",
+                    "values": []
+                  },
+                  "op": "in",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "set_literal",
+                    "value_type": "string",
+                    "values": [
+                      "buy",
+                      "deposit",
+                      "sell",
+                      "swap",
+                      "transfer",
+                      "withdraw"
+                    ]
+                  },
+                  "values": []
+                },
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.repeated_small_transfers_exceed_budget.2",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "kind",
+                    "values": []
+                  },
+                  "op": "in",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "set_literal",
+                    "value_type": "string",
+                    "values": [
+                      "buy",
+                      "deposit",
+                      "sell",
+                      "swap",
+                      "transfer",
+                      "withdraw"
+                    ]
+                  },
+                  "values": []
+                },
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.repeated_small_transfers_exceed_budget.3",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "kind",
+                    "values": []
+                  },
+                  "op": "in",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "set_literal",
+                    "value_type": "string",
+                    "values": [
+                      "buy",
+                      "deposit",
+                      "sell",
+                      "swap",
+                      "transfer",
+                      "withdraw"
+                    ]
+                  },
+                  "values": []
+                },
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.repeated_small_transfers_exceed_budget.4",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "kind",
+                    "values": []
+                  },
+                  "op": "in",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "set_literal",
+                    "value_type": "string",
+                    "values": [
+                      "buy",
+                      "deposit",
+                      "sell",
+                      "swap",
+                      "transfer",
+                      "withdraw"
+                    ]
+                  },
+                  "values": []
+                }
+              ],
+              "event_ids": [],
+              "op": "and",
+              "values": []
+            },
+            "id": "property.repeated_small_transfers_exceed_budget.allowed_action_kinds",
+            "kind": "action_constraint",
+            "severity": "error",
+            "source_span_ids": [
+              "span.repeated_small_transfers_exceed_budget.text"
+            ]
+          },
+          {
+            "finding_code": "non_positive_amount",
+            "formula": {
+              "args": [
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.repeated_small_transfers_exceed_budget.1",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "amount",
+                    "values": []
+                  },
+                  "op": "gt",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "literal",
+                    "unit": "USD",
+                    "value": 0,
+                    "value_type": "money",
+                    "values": []
+                  },
+                  "values": []
+                },
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.repeated_small_transfers_exceed_budget.2",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "amount",
+                    "values": []
+                  },
+                  "op": "gt",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "literal",
+                    "unit": "USD",
+                    "value": 0,
+                    "value_type": "money",
+                    "values": []
+                  },
+                  "values": []
+                },
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.repeated_small_transfers_exceed_budget.3",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "amount",
+                    "values": []
+                  },
+                  "op": "gt",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "literal",
+                    "unit": "USD",
+                    "value": 0,
+                    "value_type": "money",
+                    "values": []
+                  },
+                  "values": []
+                },
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.repeated_small_transfers_exceed_budget.4",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "amount",
+                    "values": []
+                  },
+                  "op": "gt",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "literal",
+                    "unit": "USD",
+                    "value": 0,
+                    "value_type": "money",
+                    "values": []
+                  },
+                  "values": []
+                }
+              ],
+              "event_ids": [],
+              "op": "and",
+              "values": []
+            },
+            "id": "property.repeated_small_transfers_exceed_budget.positive_amounts",
+            "kind": "action_constraint",
+            "severity": "error",
+            "source_span_ids": [
+              "span.repeated_small_transfers_exceed_budget.text"
+            ]
+          },
+          {
+            "finding_code": "individual_action_limit_exceeded",
+            "formula": {
+              "args": [
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.repeated_small_transfers_exceed_budget.1",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "amount",
+                    "values": []
+                  },
+                  "op": "lte",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "literal",
+                    "unit": "USD",
+                    "value": 400,
+                    "value_type": "money",
+                    "values": []
+                  },
+                  "values": []
+                },
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.repeated_small_transfers_exceed_budget.2",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "amount",
+                    "values": []
+                  },
+                  "op": "lte",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "literal",
+                    "unit": "USD",
+                    "value": 400,
+                    "value_type": "money",
+                    "values": []
+                  },
+                  "values": []
+                },
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.repeated_small_transfers_exceed_budget.3",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "amount",
+                    "values": []
+                  },
+                  "op": "lte",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "literal",
+                    "unit": "USD",
+                    "value": 400,
+                    "value_type": "money",
+                    "values": []
+                  },
+                  "values": []
+                },
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.repeated_small_transfers_exceed_budget.4",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "amount",
+                    "values": []
+                  },
+                  "op": "lte",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "literal",
+                    "unit": "USD",
+                    "value": 400,
+                    "value_type": "money",
+                    "values": []
+                  },
+                  "values": []
+                }
+              ],
+              "event_ids": [],
+              "op": "and",
+              "values": []
+            },
+            "id": "property.repeated_small_transfers_exceed_budget.individual_action_limit",
+            "kind": "action_constraint",
+            "severity": "error",
+            "source_span_ids": [
+              "span.repeated_small_transfers_exceed_budget.text"
+            ]
+          },
+          {
+            "finding_code": "disallowed_destination",
+            "formula": {
+              "args": [
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.repeated_small_transfers_exceed_budget.1",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "destination",
+                    "values": []
+                  },
+                  "op": "in",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "set_literal",
+                    "value_type": "account_id",
+                    "values": [
+                      "account.brokerage",
+                      "account.savings"
+                    ]
+                  },
+                  "values": []
+                },
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.repeated_small_transfers_exceed_budget.2",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "destination",
+                    "values": []
+                  },
+                  "op": "in",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "set_literal",
+                    "value_type": "account_id",
+                    "values": [
+                      "account.brokerage",
+                      "account.savings"
+                    ]
+                  },
+                  "values": []
+                },
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.repeated_small_transfers_exceed_budget.3",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "destination",
+                    "values": []
+                  },
+                  "op": "in",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "set_literal",
+                    "value_type": "account_id",
+                    "values": [
+                      "account.brokerage",
+                      "account.savings"
+                    ]
+                  },
+                  "values": []
+                },
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.repeated_small_transfers_exceed_budget.4",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "destination",
+                    "values": []
+                  },
+                  "op": "in",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "set_literal",
+                    "value_type": "account_id",
+                    "values": [
+                      "account.brokerage",
+                      "account.savings"
+                    ]
+                  },
+                  "values": []
+                }
+              ],
+              "event_ids": [],
+              "op": "and",
+              "values": []
+            },
+            "id": "property.repeated_small_transfers_exceed_budget.allowed_destinations",
+            "kind": "action_constraint",
+            "severity": "error",
+            "source_span_ids": [
+              "span.repeated_small_transfers_exceed_budget.text"
+            ]
+          },
+          {
+            "finding_code": "unknown_source_account",
+            "formula": {
+              "args": [
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.repeated_small_transfers_exceed_budget.1",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "source",
+                    "values": []
+                  },
+                  "op": "in",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "set_literal",
+                    "value_type": "account_id",
+                    "values": [
+                      "account.brokerage",
+                      "account.checking",
+                      "account.savings"
+                    ]
+                  },
+                  "values": []
+                },
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.repeated_small_transfers_exceed_budget.2",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "source",
+                    "values": []
+                  },
+                  "op": "in",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "set_literal",
+                    "value_type": "account_id",
+                    "values": [
+                      "account.brokerage",
+                      "account.checking",
+                      "account.savings"
+                    ]
+                  },
+                  "values": []
+                },
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.repeated_small_transfers_exceed_budget.3",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "source",
+                    "values": []
+                  },
+                  "op": "in",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "set_literal",
+                    "value_type": "account_id",
+                    "values": [
+                      "account.brokerage",
+                      "account.checking",
+                      "account.savings"
+                    ]
+                  },
+                  "values": []
+                },
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.repeated_small_transfers_exceed_budget.4",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "source",
+                    "values": []
+                  },
+                  "op": "in",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "set_literal",
+                    "value_type": "account_id",
+                    "values": [
+                      "account.brokerage",
+                      "account.checking",
+                      "account.savings"
+                    ]
+                  },
+                  "values": []
+                }
+              ],
+              "event_ids": [],
+              "op": "and",
+              "values": []
+            },
+            "id": "property.repeated_small_transfers_exceed_budget.known_sources",
+            "kind": "action_constraint",
+            "severity": "error",
+            "source_span_ids": [
+              "span.repeated_small_transfers_exceed_budget.text"
+            ]
+          },
+          {
+            "finding_code": "budget_exceeded",
+            "formula": {
+              "args": [],
+              "event_ids": [],
+              "left": {
+                "args": [],
+                "event_ids": [],
+                "left": {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "args": [],
+                    "event_ids": [],
+                    "left": {
+                      "action_id": "action.repeated_small_transfers_exceed_budget.1",
+                      "args": [],
+                      "event_ids": [],
+                      "op": "action_parameter_ref",
+                      "parameter_name": "amount",
+                      "values": []
+                    },
+                    "op": "add",
+                    "right": {
+                      "action_id": "action.repeated_small_transfers_exceed_budget.2",
+                      "args": [],
+                      "event_ids": [],
+                      "op": "action_parameter_ref",
+                      "parameter_name": "amount",
+                      "values": []
+                    },
+                    "values": []
+                  },
+                  "op": "add",
+                  "right": {
+                    "action_id": "action.repeated_small_transfers_exceed_budget.3",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "amount",
+                    "values": []
+                  },
+                  "values": []
+                },
+                "op": "add",
+                "right": {
+                  "action_id": "action.repeated_small_transfers_exceed_budget.4",
+                  "args": [],
+                  "event_ids": [],
+                  "op": "action_parameter_ref",
+                  "parameter_name": "amount",
+                  "values": []
+                },
+                "values": []
+              },
+              "op": "lte",
+              "right": {
+                "args": [],
+                "event_ids": [],
+                "op": "literal",
+                "unit": "USD",
+                "value": 700,
+                "value_type": "money",
+                "values": []
+              },
+              "values": []
+            },
+            "id": "property.repeated_small_transfers_exceed_budget.gross_debit_budget",
+            "kind": "action_constraint",
             "severity": "error",
             "source_span_ids": [
               "span.repeated_small_transfers_exceed_budget.text"
@@ -4727,6 +7481,7 @@
             ]
           },
           {
+            "finding_code": "negative_source_balance",
             "formula": {
               "args": [
                 {
@@ -4828,6 +7583,378 @@
             "source_span_ids": [
               "span.hidden_external_destination_in_benign_summary.text"
             ]
+          },
+          {
+            "finding_code": "disallowed_action_kind",
+            "formula": {
+              "args": [
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.hidden_external_destination_in_benign_summary.1",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "kind",
+                    "values": []
+                  },
+                  "op": "in",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "set_literal",
+                    "value_type": "string",
+                    "values": [
+                      "buy",
+                      "deposit",
+                      "sell",
+                      "swap",
+                      "transfer",
+                      "withdraw"
+                    ]
+                  },
+                  "values": []
+                },
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.hidden_external_destination_in_benign_summary.2",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "kind",
+                    "values": []
+                  },
+                  "op": "in",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "set_literal",
+                    "value_type": "string",
+                    "values": [
+                      "buy",
+                      "deposit",
+                      "sell",
+                      "swap",
+                      "transfer",
+                      "withdraw"
+                    ]
+                  },
+                  "values": []
+                }
+              ],
+              "event_ids": [],
+              "op": "and",
+              "values": []
+            },
+            "id": "property.hidden_external_destination_in_benign_summary.allowed_action_kinds",
+            "kind": "action_constraint",
+            "severity": "error",
+            "source_span_ids": [
+              "span.hidden_external_destination_in_benign_summary.text"
+            ]
+          },
+          {
+            "finding_code": "non_positive_amount",
+            "formula": {
+              "args": [
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.hidden_external_destination_in_benign_summary.1",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "amount",
+                    "values": []
+                  },
+                  "op": "gt",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "literal",
+                    "unit": "USD",
+                    "value": 0,
+                    "value_type": "money",
+                    "values": []
+                  },
+                  "values": []
+                },
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.hidden_external_destination_in_benign_summary.2",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "amount",
+                    "values": []
+                  },
+                  "op": "gt",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "literal",
+                    "unit": "USD",
+                    "value": 0,
+                    "value_type": "money",
+                    "values": []
+                  },
+                  "values": []
+                }
+              ],
+              "event_ids": [],
+              "op": "and",
+              "values": []
+            },
+            "id": "property.hidden_external_destination_in_benign_summary.positive_amounts",
+            "kind": "action_constraint",
+            "severity": "error",
+            "source_span_ids": [
+              "span.hidden_external_destination_in_benign_summary.text"
+            ]
+          },
+          {
+            "finding_code": "individual_action_limit_exceeded",
+            "formula": {
+              "args": [
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.hidden_external_destination_in_benign_summary.1",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "amount",
+                    "values": []
+                  },
+                  "op": "lte",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "literal",
+                    "unit": "USD",
+                    "value": 400,
+                    "value_type": "money",
+                    "values": []
+                  },
+                  "values": []
+                },
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.hidden_external_destination_in_benign_summary.2",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "amount",
+                    "values": []
+                  },
+                  "op": "lte",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "literal",
+                    "unit": "USD",
+                    "value": 400,
+                    "value_type": "money",
+                    "values": []
+                  },
+                  "values": []
+                }
+              ],
+              "event_ids": [],
+              "op": "and",
+              "values": []
+            },
+            "id": "property.hidden_external_destination_in_benign_summary.individual_action_limit",
+            "kind": "action_constraint",
+            "severity": "error",
+            "source_span_ids": [
+              "span.hidden_external_destination_in_benign_summary.text"
+            ]
+          },
+          {
+            "finding_code": "disallowed_destination",
+            "formula": {
+              "args": [
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.hidden_external_destination_in_benign_summary.1",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "destination",
+                    "values": []
+                  },
+                  "op": "in",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "set_literal",
+                    "value_type": "account_id",
+                    "values": [
+                      "account.brokerage",
+                      "account.savings"
+                    ]
+                  },
+                  "values": []
+                },
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.hidden_external_destination_in_benign_summary.2",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "destination",
+                    "values": []
+                  },
+                  "op": "in",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "set_literal",
+                    "value_type": "account_id",
+                    "values": [
+                      "account.brokerage",
+                      "account.savings"
+                    ]
+                  },
+                  "values": []
+                }
+              ],
+              "event_ids": [],
+              "op": "and",
+              "values": []
+            },
+            "id": "property.hidden_external_destination_in_benign_summary.allowed_destinations",
+            "kind": "action_constraint",
+            "severity": "error",
+            "source_span_ids": [
+              "span.hidden_external_destination_in_benign_summary.text"
+            ]
+          },
+          {
+            "finding_code": "unknown_source_account",
+            "formula": {
+              "args": [
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.hidden_external_destination_in_benign_summary.1",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "source",
+                    "values": []
+                  },
+                  "op": "in",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "set_literal",
+                    "value_type": "account_id",
+                    "values": [
+                      "account.brokerage",
+                      "account.checking",
+                      "account.savings"
+                    ]
+                  },
+                  "values": []
+                },
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.hidden_external_destination_in_benign_summary.2",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "source",
+                    "values": []
+                  },
+                  "op": "in",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "set_literal",
+                    "value_type": "account_id",
+                    "values": [
+                      "account.brokerage",
+                      "account.checking",
+                      "account.savings"
+                    ]
+                  },
+                  "values": []
+                }
+              ],
+              "event_ids": [],
+              "op": "and",
+              "values": []
+            },
+            "id": "property.hidden_external_destination_in_benign_summary.known_sources",
+            "kind": "action_constraint",
+            "severity": "error",
+            "source_span_ids": [
+              "span.hidden_external_destination_in_benign_summary.text"
+            ]
+          },
+          {
+            "finding_code": "budget_exceeded",
+            "formula": {
+              "args": [],
+              "event_ids": [],
+              "left": {
+                "args": [],
+                "event_ids": [],
+                "left": {
+                  "action_id": "action.hidden_external_destination_in_benign_summary.1",
+                  "args": [],
+                  "event_ids": [],
+                  "op": "action_parameter_ref",
+                  "parameter_name": "amount",
+                  "values": []
+                },
+                "op": "add",
+                "right": {
+                  "action_id": "action.hidden_external_destination_in_benign_summary.2",
+                  "args": [],
+                  "event_ids": [],
+                  "op": "action_parameter_ref",
+                  "parameter_name": "amount",
+                  "values": []
+                },
+                "values": []
+              },
+              "op": "lte",
+              "right": {
+                "args": [],
+                "event_ids": [],
+                "op": "literal",
+                "unit": "USD",
+                "value": 700,
+                "value_type": "money",
+                "values": []
+              },
+              "values": []
+            },
+            "id": "property.hidden_external_destination_in_benign_summary.gross_debit_budget",
+            "kind": "action_constraint",
+            "severity": "error",
+            "source_span_ids": [
+              "span.hidden_external_destination_in_benign_summary.text"
+            ]
           }
         ],
         "provenance": {
@@ -4892,6 +8019,7 @@
           },
           {
             "id": "state.cash.external_wallet",
+            "initial_domain_bound_id": "bound.hidden_external_destination_in_benign_summary.money",
             "observable": true,
             "source_span_ids": [
               "span.hidden_external_destination_in_benign_summary.text"
@@ -4991,7 +8119,7 @@
             "blocks": [],
             "id": "unresolved.hidden_external_destination_in_benign_summary.initial.external_wallet",
             "kind": "missing_value",
-            "question": "What is the initial cash balance for 'external wallet'?",
+            "question": "What is the initial cash balance for 'external wallet'? Until resolved, the model uses bounded nondeterminism from bound.hidden_external_destination_in_benign_summary.money.",
             "severity": "warning",
             "source_span_ids": [
               "span.hidden_external_destination_in_benign_summary.text"
@@ -5151,9 +8279,9 @@
                   "args": [],
                   "event_ids": [],
                   "op": "literal",
-                  "unit": "USD",
+                  "unit": "USD_notional",
                   "value": 300,
-                  "value_type": "money",
+                  "value_type": "asset_notional",
                   "values": []
                 }
               }
@@ -5255,6 +8383,7 @@
             ]
           },
           {
+            "finding_code": "negative_source_balance",
             "formula": {
               "args": [
                 {
@@ -5330,6 +8459,378 @@
             },
             "id": "property.safe_transfer_then_buy_order_sensitive.no_negative_cash",
             "kind": "invariant",
+            "severity": "error",
+            "source_span_ids": [
+              "span.safe_transfer_then_buy_order_sensitive.text"
+            ]
+          },
+          {
+            "finding_code": "disallowed_action_kind",
+            "formula": {
+              "args": [
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.safe_transfer_then_buy_order_sensitive.1",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "kind",
+                    "values": []
+                  },
+                  "op": "in",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "set_literal",
+                    "value_type": "string",
+                    "values": [
+                      "buy",
+                      "deposit",
+                      "sell",
+                      "swap",
+                      "transfer",
+                      "withdraw"
+                    ]
+                  },
+                  "values": []
+                },
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.safe_transfer_then_buy_order_sensitive.2",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "kind",
+                    "values": []
+                  },
+                  "op": "in",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "set_literal",
+                    "value_type": "string",
+                    "values": [
+                      "buy",
+                      "deposit",
+                      "sell",
+                      "swap",
+                      "transfer",
+                      "withdraw"
+                    ]
+                  },
+                  "values": []
+                }
+              ],
+              "event_ids": [],
+              "op": "and",
+              "values": []
+            },
+            "id": "property.safe_transfer_then_buy_order_sensitive.allowed_action_kinds",
+            "kind": "action_constraint",
+            "severity": "error",
+            "source_span_ids": [
+              "span.safe_transfer_then_buy_order_sensitive.text"
+            ]
+          },
+          {
+            "finding_code": "non_positive_amount",
+            "formula": {
+              "args": [
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.safe_transfer_then_buy_order_sensitive.1",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "amount",
+                    "values": []
+                  },
+                  "op": "gt",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "literal",
+                    "unit": "USD",
+                    "value": 0,
+                    "value_type": "money",
+                    "values": []
+                  },
+                  "values": []
+                },
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.safe_transfer_then_buy_order_sensitive.2",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "amount",
+                    "values": []
+                  },
+                  "op": "gt",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "literal",
+                    "unit": "USD",
+                    "value": 0,
+                    "value_type": "money",
+                    "values": []
+                  },
+                  "values": []
+                }
+              ],
+              "event_ids": [],
+              "op": "and",
+              "values": []
+            },
+            "id": "property.safe_transfer_then_buy_order_sensitive.positive_amounts",
+            "kind": "action_constraint",
+            "severity": "error",
+            "source_span_ids": [
+              "span.safe_transfer_then_buy_order_sensitive.text"
+            ]
+          },
+          {
+            "finding_code": "individual_action_limit_exceeded",
+            "formula": {
+              "args": [
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.safe_transfer_then_buy_order_sensitive.1",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "amount",
+                    "values": []
+                  },
+                  "op": "lte",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "literal",
+                    "unit": "USD",
+                    "value": 300,
+                    "value_type": "money",
+                    "values": []
+                  },
+                  "values": []
+                },
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.safe_transfer_then_buy_order_sensitive.2",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "amount",
+                    "values": []
+                  },
+                  "op": "lte",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "literal",
+                    "unit": "USD",
+                    "value": 300,
+                    "value_type": "money",
+                    "values": []
+                  },
+                  "values": []
+                }
+              ],
+              "event_ids": [],
+              "op": "and",
+              "values": []
+            },
+            "id": "property.safe_transfer_then_buy_order_sensitive.individual_action_limit",
+            "kind": "action_constraint",
+            "severity": "error",
+            "source_span_ids": [
+              "span.safe_transfer_then_buy_order_sensitive.text"
+            ]
+          },
+          {
+            "finding_code": "disallowed_destination",
+            "formula": {
+              "args": [
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.safe_transfer_then_buy_order_sensitive.1",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "destination",
+                    "values": []
+                  },
+                  "op": "in",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "set_literal",
+                    "value_type": "account_id",
+                    "values": [
+                      "account.brokerage",
+                      "account.savings"
+                    ]
+                  },
+                  "values": []
+                },
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.safe_transfer_then_buy_order_sensitive.2",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "destination",
+                    "values": []
+                  },
+                  "op": "in",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "set_literal",
+                    "value_type": "account_id",
+                    "values": [
+                      "account.brokerage",
+                      "account.savings"
+                    ]
+                  },
+                  "values": []
+                }
+              ],
+              "event_ids": [],
+              "op": "and",
+              "values": []
+            },
+            "id": "property.safe_transfer_then_buy_order_sensitive.allowed_destinations",
+            "kind": "action_constraint",
+            "severity": "error",
+            "source_span_ids": [
+              "span.safe_transfer_then_buy_order_sensitive.text"
+            ]
+          },
+          {
+            "finding_code": "unknown_source_account",
+            "formula": {
+              "args": [
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.safe_transfer_then_buy_order_sensitive.1",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "source",
+                    "values": []
+                  },
+                  "op": "in",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "set_literal",
+                    "value_type": "account_id",
+                    "values": [
+                      "account.brokerage",
+                      "account.checking",
+                      "account.savings"
+                    ]
+                  },
+                  "values": []
+                },
+                {
+                  "args": [],
+                  "event_ids": [],
+                  "left": {
+                    "action_id": "action.safe_transfer_then_buy_order_sensitive.2",
+                    "args": [],
+                    "event_ids": [],
+                    "op": "action_parameter_ref",
+                    "parameter_name": "source",
+                    "values": []
+                  },
+                  "op": "in",
+                  "right": {
+                    "args": [],
+                    "event_ids": [],
+                    "op": "set_literal",
+                    "value_type": "account_id",
+                    "values": [
+                      "account.brokerage",
+                      "account.checking",
+                      "account.savings"
+                    ]
+                  },
+                  "values": []
+                }
+              ],
+              "event_ids": [],
+              "op": "and",
+              "values": []
+            },
+            "id": "property.safe_transfer_then_buy_order_sensitive.known_sources",
+            "kind": "action_constraint",
+            "severity": "error",
+            "source_span_ids": [
+              "span.safe_transfer_then_buy_order_sensitive.text"
+            ]
+          },
+          {
+            "finding_code": "budget_exceeded",
+            "formula": {
+              "args": [],
+              "event_ids": [],
+              "left": {
+                "args": [],
+                "event_ids": [],
+                "left": {
+                  "action_id": "action.safe_transfer_then_buy_order_sensitive.1",
+                  "args": [],
+                  "event_ids": [],
+                  "op": "action_parameter_ref",
+                  "parameter_name": "amount",
+                  "values": []
+                },
+                "op": "add",
+                "right": {
+                  "action_id": "action.safe_transfer_then_buy_order_sensitive.2",
+                  "args": [],
+                  "event_ids": [],
+                  "op": "action_parameter_ref",
+                  "parameter_name": "amount",
+                  "values": []
+                },
+                "values": []
+              },
+              "op": "lte",
+              "right": {
+                "args": [],
+                "event_ids": [],
+                "op": "literal",
+                "unit": "USD",
+                "value": 600,
+                "value_type": "money",
+                "values": []
+              },
+              "values": []
+            },
+            "id": "property.safe_transfer_then_buy_order_sensitive.gross_debit_budget",
+            "kind": "action_constraint",
             "severity": "error",
             "source_span_ids": [
               "span.safe_transfer_then_buy_order_sensitive.text"
@@ -5673,6 +9174,7 @@
             ]
           },
           {
+            "finding_code": "negative_source_balance",
             "formula": {
               "args": [
                 {
@@ -5774,6 +9276,206 @@
             "source_span_ids": [
               "span.unknown_source_account_debit.text"
             ]
+          },
+          {
+            "finding_code": "disallowed_action_kind",
+            "formula": {
+              "args": [],
+              "event_ids": [],
+              "left": {
+                "action_id": "action.unknown_source_account_debit.1",
+                "args": [],
+                "event_ids": [],
+                "op": "action_parameter_ref",
+                "parameter_name": "kind",
+                "values": []
+              },
+              "op": "in",
+              "right": {
+                "args": [],
+                "event_ids": [],
+                "op": "set_literal",
+                "value_type": "string",
+                "values": [
+                  "buy",
+                  "deposit",
+                  "sell",
+                  "swap",
+                  "transfer",
+                  "withdraw"
+                ]
+              },
+              "values": []
+            },
+            "id": "property.unknown_source_account_debit.allowed_action_kinds",
+            "kind": "action_constraint",
+            "severity": "error",
+            "source_span_ids": [
+              "span.unknown_source_account_debit.text"
+            ]
+          },
+          {
+            "finding_code": "non_positive_amount",
+            "formula": {
+              "args": [],
+              "event_ids": [],
+              "left": {
+                "action_id": "action.unknown_source_account_debit.1",
+                "args": [],
+                "event_ids": [],
+                "op": "action_parameter_ref",
+                "parameter_name": "amount",
+                "values": []
+              },
+              "op": "gt",
+              "right": {
+                "args": [],
+                "event_ids": [],
+                "op": "literal",
+                "unit": "USD",
+                "value": 0,
+                "value_type": "money",
+                "values": []
+              },
+              "values": []
+            },
+            "id": "property.unknown_source_account_debit.positive_amounts",
+            "kind": "action_constraint",
+            "severity": "error",
+            "source_span_ids": [
+              "span.unknown_source_account_debit.text"
+            ]
+          },
+          {
+            "finding_code": "individual_action_limit_exceeded",
+            "formula": {
+              "args": [],
+              "event_ids": [],
+              "left": {
+                "action_id": "action.unknown_source_account_debit.1",
+                "args": [],
+                "event_ids": [],
+                "op": "action_parameter_ref",
+                "parameter_name": "amount",
+                "values": []
+              },
+              "op": "lte",
+              "right": {
+                "args": [],
+                "event_ids": [],
+                "op": "literal",
+                "unit": "USD",
+                "value": 400,
+                "value_type": "money",
+                "values": []
+              },
+              "values": []
+            },
+            "id": "property.unknown_source_account_debit.individual_action_limit",
+            "kind": "action_constraint",
+            "severity": "error",
+            "source_span_ids": [
+              "span.unknown_source_account_debit.text"
+            ]
+          },
+          {
+            "finding_code": "disallowed_destination",
+            "formula": {
+              "args": [],
+              "event_ids": [],
+              "left": {
+                "action_id": "action.unknown_source_account_debit.1",
+                "args": [],
+                "event_ids": [],
+                "op": "action_parameter_ref",
+                "parameter_name": "destination",
+                "values": []
+              },
+              "op": "in",
+              "right": {
+                "args": [],
+                "event_ids": [],
+                "op": "set_literal",
+                "value_type": "account_id",
+                "values": [
+                  "account.brokerage",
+                  "account.savings"
+                ]
+              },
+              "values": []
+            },
+            "id": "property.unknown_source_account_debit.allowed_destinations",
+            "kind": "action_constraint",
+            "severity": "error",
+            "source_span_ids": [
+              "span.unknown_source_account_debit.text"
+            ]
+          },
+          {
+            "finding_code": "unknown_source_account",
+            "formula": {
+              "args": [],
+              "event_ids": [],
+              "left": {
+                "action_id": "action.unknown_source_account_debit.1",
+                "args": [],
+                "event_ids": [],
+                "op": "action_parameter_ref",
+                "parameter_name": "source",
+                "values": []
+              },
+              "op": "in",
+              "right": {
+                "args": [],
+                "event_ids": [],
+                "op": "set_literal",
+                "value_type": "account_id",
+                "values": [
+                  "account.brokerage",
+                  "account.checking",
+                  "account.savings"
+                ]
+              },
+              "values": []
+            },
+            "id": "property.unknown_source_account_debit.known_sources",
+            "kind": "action_constraint",
+            "severity": "error",
+            "source_span_ids": [
+              "span.unknown_source_account_debit.text"
+            ]
+          },
+          {
+            "finding_code": "budget_exceeded",
+            "formula": {
+              "args": [],
+              "event_ids": [],
+              "left": {
+                "action_id": "action.unknown_source_account_debit.1",
+                "args": [],
+                "event_ids": [],
+                "op": "action_parameter_ref",
+                "parameter_name": "amount",
+                "values": []
+              },
+              "op": "lte",
+              "right": {
+                "args": [],
+                "event_ids": [],
+                "op": "literal",
+                "unit": "USD",
+                "value": 700,
+                "value_type": "money",
+                "values": []
+              },
+              "values": []
+            },
+            "id": "property.unknown_source_account_debit.gross_debit_budget",
+            "kind": "action_constraint",
+            "severity": "error",
+            "source_span_ids": [
+              "span.unknown_source_account_debit.text"
+            ]
           }
         ],
         "provenance": {
@@ -5831,6 +9533,7 @@
           },
           {
             "id": "state.cash.crypto_wallet",
+            "initial_domain_bound_id": "bound.unknown_source_account_debit.money",
             "observable": true,
             "source_span_ids": [
               "span.unknown_source_account_debit.text"
@@ -5930,7 +9633,7 @@
             "blocks": [],
             "id": "unresolved.unknown_source_account_debit.initial.crypto_wallet",
             "kind": "missing_value",
-            "question": "What is the initial cash balance for 'crypto wallet'?",
+            "question": "What is the initial cash balance for 'crypto wallet'? Until resolved, the model uses bounded nondeterminism from bound.unknown_source_account_debit.money.",
             "severity": "warning",
             "source_span_ids": [
               "span.unknown_source_account_debit.text"

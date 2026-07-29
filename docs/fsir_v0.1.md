@@ -12,9 +12,10 @@ prose
   -> property-specific TLC evidence
 ```
 
-Pydantic validates the shape and referential integrity of the model. It is not
-the proof system. TLA+/TLC remains responsible for exploring modeled behaviors
-and checking safety/liveness properties.
+Pydantic validates shape, referential integrity, recursive expression types,
+effect types, exact dependency metadata, compatibility semantics, and
+model-relative bounds. It is not the proof system. TLA+/TLC remains responsible
+for exploring modeled behaviors and checking safety/liveness properties.
 
 ## Closed contract
 
@@ -30,7 +31,8 @@ An FSIR document contains:
   currency, budget meaning, and creation tool;
 - `symbols`: declared actors/services, cash accounts, instruments, and asset
   positions;
-- `state`: typed initial variables with symbol and source-span links;
+- `state`: typed initial variables, or an explicit bounded nondeterministic
+  initial domain, with symbol and source-span links;
 - `actions`: stable IDs, actor, typed parameters, guards, reads/writes,
   atomic updates or conditional outcomes;
 - `control`: none, sequence, choice, parallel, partial order, or unresolved
@@ -55,14 +57,21 @@ Cross-reference validation rejects:
 - undeclared action actors;
 - unknown state/symbol/action/property/span references;
 - untyped or malformed expression shapes;
+- non-Boolean guards/properties and ill-typed expression operands/effects;
+- non-exact action read/write dependencies or action/step bounds;
 - conditional actions without explicit outcomes;
-- invalid control nodes/edges/branches;
-- incomplete legacy-to-FSIR ID maps;
+- invalid or non-canonical control nodes/edges/branches;
+- incomplete, forged, or semantically drifting legacy compatibility maps;
+- unsupported legacy action kinds and duplicate lowering identities;
 - placeholder/non-SHA-256 source digests.
 
 Budget semantics are mandatory. The current compatibility migration records
-`gross_debit`, matching the existing policy mirror's counter. A future net
-spend or external-outflow policy must use a different explicit value.
+`gross_debit`, matching the existing policy mirror's counter. The adapter also
+emits executable, typed FSIR action constraints for gross-debit budget,
+per-action amount, positive amount, allowed destination, allowed action kind,
+and known debit-source checks. `Property.finding_code` binds each constraint to
+the existing safety verdict vocabulary. A future net spend or external-outflow
+policy must use a different explicit value and formula.
 
 ## No action versus underspecified action
 
@@ -93,6 +102,12 @@ A buy never credits the same cash account it debited. When an instrument is
 not recoverable from the source text, the adapter creates an explicit
 `instrument.unspecified` position plus an unresolved question.
 
+Missing configured initial balances do not silently become concrete values.
+They reference a finite `integer_set` bound through
+`initial_domain_bound_id`, making the nondeterministic interpretation explicit.
+Unsupported action kinds fail validation; lowering-critical swap ambiguity is
+blocking.
+
 ## Seed migration
 
 The 12 existing semantic cases are checked in at
@@ -107,7 +122,10 @@ python scripts/generate_fsir_schema.py
 
 The migrated suite contains 10 action plans, one genuine no-action case, and
 one blocking underspecified-action case. Tests reparse every FSIR document and
-recover every original action/choice payload exactly.
+recover every original action/choice payload exactly. Adversarial regressions
+also mutate parameter/expression/domain types, dependencies, bounds,
+compatibility paths/effects, identities, choice topology, and action kinds; all
+must fail closed.
 
 ## Current boundary
 

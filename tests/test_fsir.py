@@ -25,6 +25,41 @@ def load_json(path: Path):
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def evaluate_static_expression(expression, parameters):
+    op = expression["op"]
+    if op == "literal":
+        return expression["value"]
+    if op == "set_literal":
+        return set(expression["values"])
+    if op == "action_parameter_ref":
+        return parameters[(expression["action_id"], expression["parameter_name"])]
+    if op == "not":
+        return not evaluate_static_expression(expression["args"][0], parameters)
+    if op == "and":
+        return all(
+            evaluate_static_expression(item, parameters)
+            for item in expression["args"]
+        )
+    if op == "or":
+        return any(
+            evaluate_static_expression(item, parameters)
+            for item in expression["args"]
+        )
+    left = evaluate_static_expression(expression["left"], parameters)
+    right = evaluate_static_expression(expression["right"], parameters)
+    return {
+        "eq": lambda: left == right,
+        "neq": lambda: left != right,
+        "gte": lambda: left >= right,
+        "gt": lambda: left > right,
+        "lte": lambda: left <= right,
+        "lt": lambda: left < right,
+        "add": lambda: left + right,
+        "sub": lambda: left - right,
+        "in": lambda: left in right,
+    }[op]()
+
+
 class FsirFoundationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -209,6 +244,8 @@ class FsirFoundationTests(unittest.TestCase):
         policy = {
             "budget": 600,
             "account_balances": {"checking": 600, "brokerage": 0, "savings": 0},
+            "allowed_destination_accounts": ["checking", "brokerage", "savings"],
+            "allowed_action_types": ["transfer"],
         }
         document = legacy_to_fsir(
             raw,
@@ -294,6 +331,261 @@ class FsirFoundationTests(unittest.TestCase):
         document = FsirDocument(**raw)
         dumped = dump_fsir(document)
         self.assertEqual(dump_fsir(FsirDocument(**dumped)), dumped)
+
+    def test_semantic_parameter_mutants_fail_closed(self):
+        raw = copy.deepcopy(
+            self.fsir_by_name["safe_transfer_then_buy_order_sensitive"]["fsir"]
+        )
+        amount = next(
+            item for item in raw["actions"][0]["parameters"] if item["name"] == "amount"
+        )
+        amount["value"] = "300"
+        with self.assertRaisesRegex(ValidationError, "money parameter"):
+            FsirDocument(**raw)
+
+        raw = copy.deepcopy(
+            self.fsir_by_name["safe_transfer_then_buy_order_sensitive"]["fsir"]
+        )
+        kind = next(
+            item for item in raw["actions"][0]["parameters"] if item["name"] == "kind"
+        )
+        kind["value"] = 7
+        with self.assertRaisesRegex(ValidationError, "string parameter"):
+            FsirDocument(**raw)
+
+    def test_update_and_property_expression_types_fail_closed(self):
+        raw = copy.deepcopy(
+            self.fsir_by_name["safe_transfer_then_buy_order_sensitive"]["fsir"]
+        )
+        raw["actions"][0]["updates"][0]["value"] = {
+            "op": "literal",
+            "value": True,
+            "value_type": "boolean",
+        }
+        with self.assertRaisesRegex(ValidationError, "requires money, got boolean"):
+            FsirDocument(**raw)
+
+        raw = copy.deepcopy(
+            self.fsir_by_name["safe_transfer_then_buy_order_sensitive"]["fsir"]
+        )
+        raw["properties"][0]["formula"] = {
+            "op": "literal",
+            "value": "not a proposition",
+            "value_type": "string",
+        }
+        with self.assertRaisesRegex(ValidationError, "formula must be boolean"):
+            FsirDocument(**raw)
+
+    def test_dependency_metadata_is_exact(self):
+        raw = copy.deepcopy(
+            self.fsir_by_name["safe_transfer_then_buy_order_sensitive"]["fsir"]
+        )
+        raw["actions"][0]["reads"] = raw["actions"][0]["reads"][1:]
+        with self.assertRaisesRegex(ValidationError, "reads must exactly equal"):
+            FsirDocument(**raw)
+
+        raw = copy.deepcopy(
+            self.fsir_by_name["safe_transfer_then_buy_order_sensitive"]["fsir"]
+        )
+        extra_state = next(
+            item["id"]
+            for item in raw["state"]
+            if item["id"] not in raw["actions"][0]["writes"]
+        )
+        raw["actions"][0]["writes"].append(extra_state)
+        with self.assertRaisesRegex(ValidationError, "writes must exactly equal"):
+            FsirDocument(**raw)
+
+    def test_bounds_and_domains_fail_closed(self):
+        raw = copy.deepcopy(
+            self.fsir_by_name["safe_transfer_then_buy_order_sensitive"]["fsir"]
+        )
+        raw["bounds"]["max_actions"] = 0
+        with self.assertRaisesRegex(ValidationError, "max_actions must equal"):
+            FsirDocument(**raw)
+
+        raw = copy.deepcopy(
+            self.fsir_by_name["safe_transfer_then_buy_order_sensitive"]["fsir"]
+        )
+        raw["bounds"]["domains"][0]["values"].append("not-an-integer")
+        with self.assertRaisesRegex(ValidationError, "integer_set"):
+            FsirDocument(**raw)
+
+    def test_unknown_initial_state_has_explicit_bounded_nondeterminism(self):
+        raw = copy.deepcopy(
+            self.fsir_by_name["unknown_source_account_debit"]["fsir"]
+        )
+        unknown = next(item for item in raw["state"] if item.get("initial") is None)
+        self.assertIn("initial_domain_bound_id", unknown)
+        unknown.pop("initial_domain_bound_id")
+        with self.assertRaisesRegex(ValidationError, "exactly one of initial"):
+            FsirDocument(**raw)
+
+    def test_legacy_mapping_paths_and_semantics_are_bound(self):
+        raw = copy.deepcopy(
+            self.fsir_by_name["safe_transfer_then_buy_order_sensitive"]["fsir"]
+        )
+        raw["compatibility"]["id_map"][0]["legacy_path"] = "actions[999]"
+        with self.assertRaisesRegex(ValidationError, "paths must be canonical"):
+            FsirDocument(**raw)
+
+        raw = copy.deepcopy(
+            self.fsir_by_name["safe_transfer_then_buy_order_sensitive"]["fsir"]
+        )
+        raw["actions"][0]["updates"][0]["value"]["value"] += 1
+        with self.assertRaisesRegex(ValidationError, "effects drift"):
+            FsirDocument(**raw)
+
+    def test_duplicate_parameter_names_fail_closed(self):
+        raw = copy.deepcopy(
+            self.fsir_by_name["safe_transfer_then_buy_order_sensitive"]["fsir"]
+        )
+        raw["actions"][0]["parameters"].append(
+            copy.deepcopy(raw["actions"][0]["parameters"][0])
+        )
+        with self.assertRaisesRegex(ValidationError, "duplicate action parameter"):
+            FsirDocument(**raw)
+
+    def test_choice_topology_and_branch_identity_are_canonical(self):
+        raw_plan = {
+            "choices": [
+                {
+                    "name": "one",
+                    "actions": [
+                        {
+                            "action": "transfer",
+                            "amount": 100,
+                            "from": "checking",
+                            "to": "savings",
+                        }
+                    ],
+                },
+                {
+                    "name": "two",
+                    "actions": [
+                        {
+                            "action": "transfer",
+                            "amount": 100,
+                            "from": "checking",
+                            "to": "brokerage",
+                        }
+                    ],
+                },
+            ]
+        }
+        document = legacy_to_fsir(
+            raw_plan,
+            source_text="Choose one transfer.",
+            case_id="canonical_choice",
+            policy={
+                "budget": 200,
+                "max_individual_action_amount": 200,
+                "account_balances": {"checking": 200, "savings": 0, "brokerage": 0},
+                "allowed_destination_accounts": ["savings", "brokerage"],
+                "allowed_action_types": ["transfer"],
+            },
+        )
+        raw = dump_fsir(document)
+        raw["control"]["edges"] = [
+            {
+                "before": raw["control"]["branches"][0]["action_ids"][0],
+                "after": raw["control"]["branches"][1]["action_ids"][0],
+            }
+        ]
+        with self.assertRaisesRegex(ValidationError, "cannot cross branches"):
+            FsirDocument(**raw)
+
+        raw = dump_fsir(document)
+        raw["control"]["branches"][1]["id"] = raw["control"]["branches"][0]["id"]
+        with self.assertRaisesRegex(ValidationError, "duplicate control branch"):
+            FsirDocument(**raw)
+
+    def test_unknown_legacy_action_kind_fails_closed(self):
+        with self.assertRaises(ValidationError):
+            legacy_to_fsir(
+                {
+                    "actions": [
+                        {
+                            "action": "teleport",
+                            "amount": 100,
+                            "from": "checking",
+                            "to": "savings",
+                        }
+                    ]
+                },
+                source_text="Teleport funds.",
+                case_id="unknown_action",
+                policy={
+                    "budget": 100,
+                    "account_balances": {"checking": 100, "savings": 0},
+                    "allowed_destination_accounts": ["savings"],
+                    "allowed_action_types": ["transfer"],
+                },
+            )
+
+    def test_swap_semantic_ambiguity_is_blocking(self):
+        document = legacy_to_fsir(
+            {
+                "actions": [
+                    {
+                        "action": "swap",
+                        "amount": 100,
+                        "from": "brokerage",
+                        "to": "brokerage",
+                    }
+                ]
+            },
+            source_text="Swap 100 inside brokerage.",
+            case_id="ambiguous_swap",
+            policy={
+                "budget": 100,
+                "account_balances": {"brokerage": 100},
+                "allowed_destination_accounts": ["brokerage"],
+                "allowed_action_types": ["swap"],
+            },
+        )
+        self.assertTrue(
+            any(
+                item.kind == "missing_semantics" and item.severity == "blocking"
+                for item in document.unresolved
+            )
+        )
+        raw = dump_fsir(document)
+        raw["unresolved"] = []
+        with self.assertRaisesRegex(ValidationError, "swap action.*requires a blocking"):
+            FsirDocument(**raw)
+
+    def test_policy_findings_are_executable_fsir_properties(self):
+        for migrated in self.fsir_suite["cases"]:
+            expected = set(migrated["expected_finding_codes"])
+            property_codes = {
+                item.get("finding_code")
+                for item in migrated["fsir"]["properties"]
+                if item.get("finding_code")
+            }
+            with self.subTest(case=migrated["name"]):
+                self.assertLessEqual(expected, property_codes)
+
+    def test_static_policy_formulas_match_seed_findings(self):
+        for migrated in self.fsir_suite["cases"]:
+            document = migrated["fsir"]
+            parameters = {
+                (action["id"], parameter["name"]): parameter["value"]
+                for action in document["actions"]
+                for parameter in action["parameters"]
+            }
+            failed_codes = {
+                item["finding_code"]
+                for item in document["properties"]
+                if item["kind"] == "action_constraint"
+                and item.get("finding_code")
+                and not evaluate_static_expression(item["formula"], parameters)
+            }
+            expected_static_codes = set(migrated["expected_finding_codes"]) - {
+                "negative_source_balance"
+            }
+            with self.subTest(case=migrated["name"]):
+                self.assertEqual(failed_codes, expected_static_codes)
 
 
 if __name__ == "__main__":

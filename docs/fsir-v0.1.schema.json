@@ -457,6 +457,18 @@
       "additionalProperties": false,
       "description": "Closed recursive expression AST.",
       "properties": {
+        "action_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Action Id"
+        },
         "args": {
           "items": {
             "$ref": "#/$defs/Expression"
@@ -487,6 +499,7 @@
             "literal",
             "set_literal",
             "state_ref",
+            "action_parameter_ref",
             "not",
             "and",
             "or",
@@ -506,6 +519,18 @@
           ],
           "title": "Op",
           "type": "string"
+        },
+        "parameter_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Parameter Name"
         },
         "right": {
           "anyOf": [
@@ -569,10 +594,13 @@
             {
               "enum": [
                 "money",
+                "asset_notional",
                 "integer",
                 "enum",
                 "boolean",
-                "string"
+                "string",
+                "account_id",
+                "instrument_id"
               ],
               "type": "string"
             },
@@ -791,6 +819,14 @@
       "additionalProperties": false,
       "properties": {
         "action": {
+          "enum": [
+            "buy",
+            "sell",
+            "swap",
+            "deposit",
+            "transfer",
+            "withdraw"
+          ],
           "title": "Action",
           "type": "string"
         },
@@ -935,6 +971,18 @@
     "Property": {
       "additionalProperties": false,
       "properties": {
+        "finding_code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Finding Code"
+        },
         "formula": {
           "$ref": "#/$defs/Expression"
         },
@@ -1166,6 +1214,18 @@
           ],
           "default": null,
           "title": "Initial"
+        },
+        "initial_domain_bound_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Initial Domain Bound Id"
         },
         "observable": {
           "default": true,
