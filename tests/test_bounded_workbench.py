@@ -14,6 +14,7 @@ os.environ.setdefault("SAFETY_ACTION_TRANSFORMER", "block")
 
 from safety.bounded_workbench import (  # noqa: E402
     APPROVED_LOWERING_COMMIT,
+    BoundedEvidenceUnavailable,
     CONTROL_KEYS,
     canonical_fsir_response,
     control_envelope,
@@ -256,8 +257,8 @@ class BoundedWorkbenchContractTests(unittest.TestCase):
                 for case_id in ("core.17", "core.18"):
                     with self.subTest(case_id=case_id):
                         with self.assertRaisesRegex(
-                            (ValueError, FileNotFoundError),
-                            "artifact (inventory|hash|inventory missing)",
+                            BoundedEvidenceUnavailable,
+                            "bounded evidence",
                         ):
                             corpus_case_response(case_id)
 
@@ -268,8 +269,8 @@ class BoundedWorkbenchContractTests(unittest.TestCase):
             (artifacts / "ordered").rename(artifacts / "renamed")
             with patch.object(bounded_workbench, "CORPUS_ROOT", root):
                 with self.assertRaisesRegex(
-                    ValueError,
-                    "artifact directory is unavailable",
+                    BoundedEvidenceUnavailable,
+                    "bounded evidence",
                 ):
                     corpus_case_response("core.17")
 
@@ -285,8 +286,8 @@ class BoundedWorkbenchContractTests(unittest.TestCase):
                 path,
             ):
                 with self.assertRaisesRegex(
-                    ValueError,
-                    "identity manifest hash drift",
+                    BoundedEvidenceUnavailable,
+                    "bounded evidence",
                 ):
                     corpus_case_response("core.17")
 
@@ -308,8 +309,8 @@ class BoundedWorkbenchContractTests(unittest.TestCase):
                 )
             with patch.object(bounded_workbench, "CORPUS_ROOT", root):
                 with self.assertRaisesRegex(
-                    ValueError,
-                    "artifact hash drift",
+                    BoundedEvidenceUnavailable,
+                    "bounded evidence",
                 ):
                     corpus_case_response("core.17")
 
@@ -320,8 +321,8 @@ class BoundedWorkbenchContractTests(unittest.TestCase):
             (ordered / "unexpected.txt").write_text("unexpected")
             with patch.object(bounded_workbench, "CORPUS_ROOT", root):
                 with self.assertRaisesRegex(
-                    ValueError,
-                    "artifact inventory drift",
+                    BoundedEvidenceUnavailable,
+                    "bounded evidence",
                 ):
                     corpus_case_response("core.17")
 
@@ -335,8 +336,8 @@ class BoundedWorkbenchContractTests(unittest.TestCase):
             ).unlink()
             with patch.object(bounded_workbench, "CORPUS_ROOT", root):
                 with self.assertRaisesRegex(
-                    FileNotFoundError,
-                    "artifact inventory missing",
+                    BoundedEvidenceUnavailable,
+                    "bounded evidence",
                 ):
                     corpus_case_response("core.17")
 
@@ -458,6 +459,42 @@ class BoundedWorkbenchApiTests(unittest.TestCase):
     def tearDown(self):
         api_index.rate_limiter.reset()
 
+    def _copied_corpus(self, directory: str) -> Path:
+        root = Path(directory) / "corpus"
+        shutil.copytree(CORPUS_ROOT, root)
+        return root
+
+    def _request_case(self):
+        return self.client.post(
+            "/api/bounded-workbench",
+            json={"source": "corpus_case", "case_id": "core.17"},
+        )
+
+    def _request_reference(self):
+        return self.client.post(
+            "/api/bounded-workbench",
+            json={
+                "source": "corpus_case",
+                "case_id": "core.30",
+                "hero_stage": 4,
+            },
+        )
+
+    def _assert_evidence_unavailable(self, response) -> None:
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(
+            response.json(),
+            {
+                "detail": {
+                    "code": "bounded_evidence_unavailable",
+                    "message": (
+                        "Frozen case evidence failed integrity validation."
+                    ),
+                }
+            },
+        )
+        self.assertNotIn("trusted", response.text)
+
     def test_corpus_request_and_legacy_route_both_exist(self):
         response = self.client.post(
             "/api/bounded-workbench",
@@ -512,10 +549,34 @@ class BoundedWorkbenchApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json()["detail"], "unknown frozen corpus case")
 
+    def test_user_hero_stage_error_remains_422(self):
+        response = self.client.post(
+            "/api/bounded-workbench",
+            json={
+                "source": "corpus_case",
+                "case_id": "core.17",
+                "hero_stage": 2,
+            },
+        )
+        self.assertEqual(response.status_code, 422)
+        self.assertNotEqual(
+            response.json().get("detail", {}).get("code")
+            if isinstance(response.json().get("detail"), dict)
+            else None,
+            "bounded_evidence_unavailable",
+        )
+
+    def test_corpus_integrity_drift_returns_controlled_unavailable_error(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "corpus.json"
+            path.write_bytes(bounded_workbench.CORPUS_PATH.read_bytes() + b"\n")
+            with patch.object(bounded_workbench, "CORPUS_PATH", path):
+                response = self._request_case()
+        self._assert_evidence_unavailable(response)
+
     def test_substituted_bundle_returns_controlled_unavailable_error(self):
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory) / "corpus"
-            shutil.copytree(CORPUS_ROOT, root)
+            root = self._copied_corpus(directory)
             artifacts = root / "backend-artifacts"
             ordered = artifacts / "ordered"
             concurrent = artifacts / "concurrent"
@@ -524,15 +585,117 @@ class BoundedWorkbenchApiTests(unittest.TestCase):
             concurrent.rename(ordered)
             swap.rename(concurrent)
             with patch.object(bounded_workbench, "CORPUS_ROOT", root):
-                response = self.client.post(
-                    "/api/bounded-workbench",
-                    json={"source": "corpus_case", "case_id": "core.17"},
+                response = self._request_case()
+        self._assert_evidence_unavailable(response)
+
+    def test_renamed_bundle_returns_controlled_unavailable_error(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = self._copied_corpus(directory)
+            artifacts = root / "backend-artifacts"
+            (artifacts / "ordered").rename(artifacts / "renamed")
+            with patch.object(bounded_workbench, "CORPUS_ROOT", root):
+                response = self._request_case()
+        self._assert_evidence_unavailable(response)
+
+    def test_coherent_substitution_returns_controlled_unavailable_error(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = self._copied_corpus(directory)
+            artifacts = root / "backend-artifacts"
+            for name in (
+                "classification.json",
+                "execution-report.json",
+                "execution-evidence-manifest.json",
+                "normalized-trace.json",
+                "tlc-output.txt",
+            ):
+                shutil.copyfile(
+                    artifacts / "concurrent" / name,
+                    artifacts / "ordered" / name,
                 )
-        self.assertEqual(response.status_code, 409)
-        self.assertEqual(
-            response.json()["detail"]["code"],
-            "bounded_evidence_unavailable",
-        )
+            with patch.object(bounded_workbench, "CORPUS_ROOT", root):
+                response = self._request_case()
+        self._assert_evidence_unavailable(response)
+
+    def test_identity_drift_returns_controlled_unavailable_error(self):
+        with tempfile.TemporaryDirectory() as directory:
+            identities = Path(directory) / "evidence-identities.json"
+            identities.write_bytes(
+                bounded_workbench.EVIDENCE_IDENTITIES_PATH.read_bytes() + b"\n"
+            )
+            with patch.object(
+                bounded_workbench,
+                "EVIDENCE_IDENTITIES_PATH",
+                identities,
+            ):
+                response = self._request_case()
+        self._assert_evidence_unavailable(response)
+
+    def test_reference_link_drift_returns_controlled_unavailable_error(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "reference-links.json"
+            path.write_bytes(
+                bounded_workbench.CORE30_REFERENCE_LINKS_PATH.read_bytes()
+                + b"\n"
+            )
+            with patch.object(
+                bounded_workbench,
+                "CORE30_REFERENCE_LINKS_PATH",
+                path,
+            ):
+                response = self._request_reference()
+        self._assert_evidence_unavailable(response)
+
+    def test_reference_decision_drift_returns_controlled_unavailable_error(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "stage4-oracle-decision.json"
+            path.write_bytes(
+                bounded_workbench.CORE30_STAGE4_DECISION_PATH.read_bytes()
+                + b"\n"
+            )
+            with patch.object(
+                bounded_workbench,
+                "CORE30_STAGE4_DECISION_PATH",
+                path,
+            ):
+                response = self._request_reference()
+        self._assert_evidence_unavailable(response)
+
+    def test_artifact_addition_returns_controlled_unavailable_error(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = self._copied_corpus(directory)
+            (
+                root / "backend-artifacts" / "ordered" / "extra.txt"
+            ).write_text("unexpected")
+            with patch.object(bounded_workbench, "CORPUS_ROOT", root):
+                response = self._request_case()
+        self._assert_evidence_unavailable(response)
+
+    def test_artifact_deletion_returns_controlled_unavailable_error(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = self._copied_corpus(directory)
+            (
+                root
+                / "backend-artifacts"
+                / "ordered"
+                / "classification.json"
+            ).unlink()
+            with patch.object(bounded_workbench, "CORPUS_ROOT", root):
+                response = self._request_case()
+        self._assert_evidence_unavailable(response)
+
+    def test_artifact_byte_drift_returns_controlled_unavailable_error(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = self._copied_corpus(directory)
+            artifact = (
+                root
+                / "backend-artifacts"
+                / "ordered"
+                / "classification.json"
+            )
+            artifact.write_bytes(artifact.read_bytes() + b"\n")
+            with patch.object(bounded_workbench, "CORPUS_ROOT", root):
+                response = self._request_case()
+        self._assert_evidence_unavailable(response)
 
     def test_invalid_fsir_never_falls_back_to_prose(self):
         response = self.client.post(

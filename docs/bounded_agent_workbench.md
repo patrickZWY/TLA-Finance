@@ -49,6 +49,23 @@ coherent report/manifest substitutions, added or deleted artifacts, and
 identity drift fail closed rather than returning fresh trusted evidence. The
 response fixture label is taken only from that verified identity.
 
+Every corpus/reference identity, directory, type, inventory, hash,
+classification, trace, and manifest integrity failure is translated through
+the dedicated `BoundedEvidenceUnavailable` category. The public endpoint
+returns one stable failure contract without internal validation details:
+
+```json
+{
+  "detail": {
+    "code": "bounded_evidence_unavailable",
+    "message": "Frozen case evidence failed integrity validation."
+  }
+}
+```
+
+Its status is HTTP 409. Invalid request shapes and user inputs remain HTTP 422;
+unknown frozen case IDs remain HTTP 404.
+
 - `core.17` is the canonical ordered passing run.
 - `core.18` is the canonical concurrent property violation.
 - `core.06` is an intentional zero-action result. It is not extraction failure
@@ -144,7 +161,8 @@ The tests cover the exclusive API union, preserved semantic-check route,
 canonical hashes/IDs, strict counterexample linkage, zero-action rendering,
 all corpus fail-closed dispositions, core.30 reference-only separation, closed
 state controls, bundle swap/rename/substitution/inventory rejection, bounded
-approval expiry, responsive markers, and accessibility labels/live regions.
+approval expiry, uniform API 409/no-evidence responses, responsive markers,
+and accessibility labels/live regions.
 
 ## Browser retention
 

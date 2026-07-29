@@ -130,6 +130,21 @@ STATE_CONTROLS: dict[str, dict[str, bool]] = {
 }
 
 
+class BoundedEvidenceUnavailable(Exception):
+    """Stable category for frozen evidence integrity/unavailability failures."""
+
+
+class _BoundedEvidenceInvalid(BoundedEvidenceUnavailable, ValueError):
+    """Evidence exists but fails a closed integrity contract."""
+
+
+class _BoundedEvidenceMissing(
+    BoundedEvidenceUnavailable,
+    FileNotFoundError,
+):
+    """A required evidence artifact is absent."""
+
+
 def control_envelope(state: str) -> dict[str, bool]:
     """Return the closed control set for a product state."""
 
@@ -145,9 +160,12 @@ def corpus_case_response(case_id: str, hero_stage: int | None = None) -> dict[st
     fail-closed.  Core 30 may replay its approved eight-stage hero sequence.
     """
 
-    corpus_bytes = CORPUS_PATH.read_bytes()
+    try:
+        corpus_bytes = CORPUS_PATH.read_bytes()
+    except OSError as exc:
+        _raise_evidence_unavailable(exc)
     if _sha256_bytes(corpus_bytes) != CORPUS_SHA256:
-        raise ValueError("frozen corpus hash drift")
+        raise _BoundedEvidenceInvalid("frozen corpus integrity failure")
     corpus = json.loads(corpus_bytes)
     case = next((item for item in corpus["cases"] if item["id"] == case_id), None)
     if case is None:
@@ -474,6 +492,17 @@ def _core30_reference_contract(
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Load and cross-check the independently accepted reference-only oracle."""
 
+    try:
+        return _core30_reference_contract_unchecked(canonical)
+    except BoundedEvidenceUnavailable:
+        raise
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        _raise_evidence_unavailable(exc)
+
+
+def _core30_reference_contract_unchecked(
+    canonical: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
     links_bytes = CORE30_REFERENCE_LINKS_PATH.read_bytes()
     decision_bytes = CORE30_STAGE4_DECISION_PATH.read_bytes()
     if _sha256_bytes(links_bytes) != CORE30_REFERENCE_LINKS_SHA256:
@@ -877,7 +906,33 @@ def _verify_fixture_identity(
             raise ValueError(f"case-to-fixture identity drift: {field}")
 
 
+def _raise_evidence_unavailable(exc: Exception) -> None:
+    if isinstance(exc, FileNotFoundError):
+        raise _BoundedEvidenceMissing(
+            "required bounded evidence is unavailable"
+        ) from exc
+    if isinstance(exc, (ValueError, KeyError, TypeError)):
+        raise _BoundedEvidenceInvalid(
+            "bounded evidence integrity validation failed"
+        ) from exc
+    raise BoundedEvidenceUnavailable(
+        "bounded evidence could not be read"
+    ) from exc
+
+
 def _verified_fixture(case_id: str, fixture_id: str) -> dict[str, Any]:
+    try:
+        return _verified_fixture_unchecked(case_id, fixture_id)
+    except BoundedEvidenceUnavailable:
+        raise
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        _raise_evidence_unavailable(exc)
+
+
+def _verified_fixture_unchecked(
+    case_id: str,
+    fixture_id: str,
+) -> dict[str, Any]:
     identity = _evidence_identity(case_id, fixture_id)
     fixture_root = (
         CORPUS_ROOT

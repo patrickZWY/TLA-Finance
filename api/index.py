@@ -51,6 +51,7 @@ from safety.transformer import (
 )
 from safety.agent import TlaSafetyAgent
 from safety.bounded_workbench import (
+    BoundedEvidenceUnavailable,
     canonical_fsir_response,
     corpus_case_response,
 )
@@ -440,14 +441,13 @@ def bounded_workbench(req: BoundedWorkbenchRequest):
                 status_code=404,
                 detail="unknown frozen corpus case",
             ) from exc
-        except FileNotFoundError as exc:
+        except BoundedEvidenceUnavailable as exc:
             raise HTTPException(
                 status_code=409,
                 detail={
                     "code": "bounded_evidence_unavailable",
                     "message": (
-                        "Frozen case evidence failed identity or inventory "
-                        "validation."
+                        "Frozen case evidence failed integrity validation."
                     ),
                 },
             ) from exc
