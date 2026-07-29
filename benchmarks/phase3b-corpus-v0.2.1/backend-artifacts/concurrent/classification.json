@@ -1,0 +1,1 @@
+{"detail":"TLC violated invariant Prop_property_safe_transfer_then_buy_order_sensitive_no_negative_cash_3fdd966b","kind":"property_violation","returncode":12,"violated_property_ids":["property.safe_transfer_then_buy_order_sensitive.no_negative_cash"]}

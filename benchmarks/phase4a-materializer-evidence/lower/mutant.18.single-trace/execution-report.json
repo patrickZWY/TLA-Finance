@@ -1,0 +1,1 @@
+{"expected_classification":"passed","expected_event_ids":[],"expected_property_ids":[],"fixture_materialized":"ordered","mutant_id":"mutant.18.single-trace","observed_classification":"passed","observed_event_ids":[],"observed_property_ids":[],"returncode":0,"satisfied":true,"schema_version":"phase4a-lower-mutant-execution-0.1"}
