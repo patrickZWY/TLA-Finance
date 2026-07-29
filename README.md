@@ -13,17 +13,23 @@ investment examples are educational, not licensed financial advice.
 ## Current Demo Path
 
 The frontend served from `public/index.html` is the **Finance Safety Workbench**.
-It is focused on one flow:
+It exposes two deliberately separate trust paths:
 
 ```text
-Browser workbench
+Legacy prose path
   -> POST /api/semantic-check
   -> semantic action extraction
   -> canonical finance action JSON
   -> Python policy mirror
   -> generated PlusCal/TLA+ artifacts
   -> optional TLC model checker
-  -> structured result shown in the UI
+
+Closed bounded path
+  -> POST /api/bounded-workbench
+  -> typed FSIR v0.1 validation
+  -> bounded FSIR-to-TLA+ lowering
+  -> hash-bound TLC evidence and source-linked counterexample
+  -> fail-closed approval controls
 ```
 
 The workbench lets you:
@@ -34,6 +40,24 @@ The workbench lets you:
 - see Python policy findings,
 - see PlusCal/TLC status and artifact paths,
 - inspect raw model output when extraction fails.
+
+The prose path is a heuristic projection and grants no execution authority.
+The bounded path accepts only a frozen corpus case or a complete canonical
+FSIR document. Its currently supported executable subset is intentionally
+narrow; unsupported inputs, stale or malformed evidence, and contract drift
+fail closed.
+
+After starting the app, these local URLs exercise the reviewed bounded flow:
+
+- `http://127.0.0.1:8000/?case=core.17` — ordered lifecycle, verified pass;
+- `http://127.0.0.1:8000/?case=core.18` — concurrent lifecycle, exact
+  counterexample;
+- `http://127.0.0.1:8000/?case=core.06` — intentional no-action result;
+- `http://127.0.0.1:8000/?case=core.30&stage=4` — reference-only ambiguity
+  audit with approval disabled.
+
+See [docs/bounded_agent_workbench.md](docs/bounded_agent_workbench.md) for the
+API contract, evidence boundary, controls, and known limits.
 
 The older multi-agent personal finance assistant still exists through
 `/api/chat` and `main.py`, but it is not the current first-screen frontend.
@@ -488,6 +512,9 @@ public/index.html             Finance Safety Workbench UI
 safety/agent.py               TlaSafetyAgent pipeline
 safety/models.py              FinanceAction and SafetyPolicy models
 safety/fsir.py                Closed typed FSIR v0.1 models, validation, and legacy adapters
+safety/fsir_lowering.py       Reviewed bounded FSIR-to-TLA+ lowering and evidence validation
+safety/bounded_workbench.py   Closed corpus/FSIR workbench contract and controls
+safety/phase4a_semantic_oracles.py  Closed semantic-mutant oracle registry
 safety/transformer.py         JSON, fenced-block, explicit, and OpenAI action transformers
 safety/validator.py           Deterministic policy mirror
 safety/tla_generator.py       PlusCal/TLA+ and TLC config generator
@@ -498,6 +525,7 @@ fixtures/                     Safe and unsafe policies, actions, and prose examp
 tests/                        unittest coverage for API, safety, config, observability
 docs/                         Deeper setup and design notes
 scripts/run_cloudflare_demo.sh Local Cloudflare Access demo helper
+scripts/materialize_phase3b_mutants.py  Deterministic 32-mutant materializer/replay
 main.py                       Terminal multi-agent finance assistant
 observability.py              Structured event facade and logging sink
 config.py                     Runtime configuration helpers
@@ -507,6 +535,13 @@ config.py                     Runtime configuration helpers
 
 - [docs/fsir_v0.1.md](docs/fsir_v0.1.md) defines the typed Finance
   Specification IR boundary, compatibility contract, and seed migration.
+- [docs/fsir_lowering_v0.1.md](docs/fsir_lowering_v0.1.md) defines the reviewed
+  bounded FSIR-to-TLA+ subset and evidence contract.
+- [docs/bounded_agent_workbench.md](docs/bounded_agent_workbench.md) documents
+  the closed API/UI path, reference-only core.30 boundary, and local demo.
+- [docs/phase4a_semantic_mutant_materializer.md](docs/phase4a_semantic_mutant_materializer.md)
+  documents deterministic execution and replay of all 32 frozen corpus
+  semantic mutants.
 - [docs/local_llm_semantic_extraction.md](docs/local_llm_semantic_extraction.md)
   covers the local Ollama semantic extraction demo.
 - [docs/local_llm_safety_workbench_design.md](docs/local_llm_safety_workbench_design.md)
