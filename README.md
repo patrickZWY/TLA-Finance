@@ -270,6 +270,12 @@ The Python policy layer checks:
 The PlusCal/TLC layer checks the generated finite-state model for the same
 invariants and makes order-sensitive failures visible in model-checker output.
 
+The typed FSIR path also has a deterministic bounded direct-TLA+ lowerer. It
+supports sequences, mutually exclusive plans, guarded cash/asset updates, and
+partial-order transfer-settlement lifecycles, with stable source maps,
+artifact/tool/input hashes, and normalized TLC counterexamples. See
+[`docs/fsir_lowering_v0.1.md`](docs/fsir_lowering_v0.1.md).
+
 ### Possible Direction: EARS Requirements Before Formalization
 
 The workbench currently extracts normalized actions (and, where applicable,

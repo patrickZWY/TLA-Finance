@@ -977,9 +977,12 @@ def _required_policy_properties(
     state: list[StateVariable],
     actions: list[FsirAction],
     control: Control,
+    policy_action_ids: set[str] | None = None,
 ) -> list[Property]:
     """Derive the complete canonical finance-policy property set."""
 
+    if policy_action_ids is not None:
+        actions = [action for action in actions if action.id in policy_action_ids]
     if not actions:
         return []
 
@@ -1002,7 +1005,15 @@ def _required_policy_properties(
     }
     action_ids = [action.id for action in actions]
     policy_groups = (
-        [branch.action_ids for branch in control.branches]
+        [
+            [
+                action_id
+                for action_id in branch.action_ids
+                if action_id in action_ids
+            ]
+            for branch in control.branches
+            if any(action_id in action_ids for action_id in branch.action_ids)
+        ]
         if control.kind == "choice"
         else [action_ids]
     )
@@ -1687,6 +1698,9 @@ class FsirDocument(ClosedModel):
             state=state,
             actions=actions,
             control=control,
+            policy_action_ids={
+                item.fsir_action_id for item in compatibility.id_map
+            },
         )
         actual_policy_properties = [
             item for item in properties if item.finding_code is not None
