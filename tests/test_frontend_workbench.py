@@ -128,6 +128,8 @@ class BoundedAgentWorkbenchTests(unittest.TestCase):
             self.assertIn(marker, HTML)
         self.assertIn('id="contractNotice" role="alert"', HTML)
         self.assertIn('aria-label="Agent workflow"', HTML)
+        self.assertIn("#boundedApprovalBtn:disabled", HTML)
+        self.assertIn("background: #e5ebe7", HTML)
 
     def test_verifier_status_is_neutral_until_evidence_exists(self):
         self.assertIn(

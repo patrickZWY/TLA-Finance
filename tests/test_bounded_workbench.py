@@ -1,5 +1,7 @@
 import json
 import os
+import shutil
+import tempfile
 import unittest
 from pathlib import Path
 from subprocess import TimeoutExpired
@@ -17,6 +19,7 @@ from safety.bounded_workbench import (  # noqa: E402
     control_envelope,
     corpus_case_response,
 )
+import safety.bounded_workbench as bounded_workbench  # noqa: E402
 
 
 CORPUS_ROOT = ROOT / "fixtures" / "phase3b-corpus-v0.2.1"
@@ -35,6 +38,11 @@ CORE30_STAGE4_DECISION = json.loads(
 
 
 class BoundedWorkbenchContractTests(unittest.TestCase):
+    def _copied_corpus(self, directory: str) -> Path:
+        root = Path(directory) / "corpus"
+        shutil.copytree(CORPUS_ROOT, root)
+        return root
+
     def test_canonical_ordered_case_uses_approved_hashes_and_ids(self):
         payload = corpus_case_response("core.17")
         self.assertEqual(payload["lowering"]["disposition"], "lower")
@@ -47,6 +55,19 @@ class BoundedWorkbenchContractTests(unittest.TestCase):
         self.assertEqual(
             payload["verification"]["model_hash"],
             "50836489a453ea2520cf5207e6e6f24dead291f13e6cb2f6ad2651169e7cf70c",
+        )
+        self.assertEqual(
+            payload["lowering"]["fixture_id"],
+            payload["evidence"]["fixture_id"],
+        )
+        self.assertEqual(payload["evidence"]["case_id"], "core.17")
+        self.assertEqual(
+            payload["evidence"]["fixture_id"],
+            "fixture.phase3a.lifecycle.ordered",
+        )
+        self.assertEqual(
+            payload["evidence"]["identity_manifest_sha256"],
+            bounded_workbench.EVIDENCE_IDENTITIES_SHA256,
         )
         self.assertIn(
             "event.buy.execute",
@@ -221,6 +242,104 @@ class BoundedWorkbenchContractTests(unittest.TestCase):
                         6,
                     )
 
+    def test_complete_fixture_bundle_swap_fails_closed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = self._copied_corpus(directory)
+            artifacts = root / "backend-artifacts"
+            ordered = artifacts / "ordered"
+            concurrent = artifacts / "concurrent"
+            swap = artifacts / "swap"
+            ordered.rename(swap)
+            concurrent.rename(ordered)
+            swap.rename(concurrent)
+            with patch.object(bounded_workbench, "CORPUS_ROOT", root):
+                for case_id in ("core.17", "core.18"):
+                    with self.subTest(case_id=case_id):
+                        with self.assertRaisesRegex(
+                            (ValueError, FileNotFoundError),
+                            "artifact (inventory|hash|inventory missing)",
+                        ):
+                            corpus_case_response(case_id)
+
+    def test_fixture_directory_rename_fails_closed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = self._copied_corpus(directory)
+            artifacts = root / "backend-artifacts"
+            (artifacts / "ordered").rename(artifacts / "renamed")
+            with patch.object(bounded_workbench, "CORPUS_ROOT", root):
+                with self.assertRaisesRegex(
+                    ValueError,
+                    "artifact directory is unavailable",
+                ):
+                    corpus_case_response("core.17")
+
+    def test_evidence_identity_manifest_tamper_fails_closed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "evidence-identities.json"
+            path.write_bytes(
+                bounded_workbench.EVIDENCE_IDENTITIES_PATH.read_bytes() + b"\n"
+            )
+            with patch.object(
+                bounded_workbench,
+                "EVIDENCE_IDENTITIES_PATH",
+                path,
+            ):
+                with self.assertRaisesRegex(
+                    ValueError,
+                    "identity manifest hash drift",
+                ):
+                    corpus_case_response("core.17")
+
+    def test_coherent_report_manifest_substitution_fails_closed(self):
+        substituted = (
+            "classification.json",
+            "execution-evidence-manifest.json",
+            "execution-report.json",
+            "normalized-trace.json",
+            "tlc-output.txt",
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            root = self._copied_corpus(directory)
+            artifacts = root / "backend-artifacts"
+            for name in substituted:
+                shutil.copyfile(
+                    artifacts / "concurrent" / name,
+                    artifacts / "ordered" / name,
+                )
+            with patch.object(bounded_workbench, "CORPUS_ROOT", root):
+                with self.assertRaisesRegex(
+                    ValueError,
+                    "artifact hash drift",
+                ):
+                    corpus_case_response("core.17")
+
+    def test_exact_artifact_inventory_add_and_delete_fail_closed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = self._copied_corpus(directory)
+            ordered = root / "backend-artifacts" / "ordered"
+            (ordered / "unexpected.txt").write_text("unexpected")
+            with patch.object(bounded_workbench, "CORPUS_ROOT", root):
+                with self.assertRaisesRegex(
+                    ValueError,
+                    "artifact inventory drift",
+                ):
+                    corpus_case_response("core.17")
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = self._copied_corpus(directory)
+            (
+                root
+                / "backend-artifacts"
+                / "ordered"
+                / "classification.json"
+            ).unlink()
+            with patch.object(bounded_workbench, "CORPUS_ROOT", root):
+                with self.assertRaisesRegex(
+                    FileNotFoundError,
+                    "artifact inventory missing",
+                ):
+                    corpus_case_response("core.17")
+
     def test_canonical_fsir_lowers_without_running_tlc(self):
         raw = json.loads(
             (
@@ -392,6 +511,28 @@ class BoundedWorkbenchApiTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json()["detail"], "unknown frozen corpus case")
+
+    def test_substituted_bundle_returns_controlled_unavailable_error(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "corpus"
+            shutil.copytree(CORPUS_ROOT, root)
+            artifacts = root / "backend-artifacts"
+            ordered = artifacts / "ordered"
+            concurrent = artifacts / "concurrent"
+            swap = artifacts / "swap"
+            ordered.rename(swap)
+            concurrent.rename(ordered)
+            swap.rename(concurrent)
+            with patch.object(bounded_workbench, "CORPUS_ROOT", root):
+                response = self.client.post(
+                    "/api/bounded-workbench",
+                    json={"source": "corpus_case", "case_id": "core.17"},
+                )
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(
+            response.json()["detail"]["code"],
+            "bounded_evidence_unavailable",
+        )
 
     def test_invalid_fsir_never_falls_back_to_prose(self):
         response = self.client.post(

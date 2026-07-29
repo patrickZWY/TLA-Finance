@@ -39,6 +39,16 @@ TLC classification, strict normalized trace, and execution-evidence manifest.
 The approved lowering anchor is
 `d45efd09ffe5c77b89fcad1954d7959e54b7b8f3`.
 
+Before any fixture is labeled or returned, the hash-pinned
+`evidence-identities.json` contract independently binds the requested case and
+fixture IDs to the exact artifact directory, module, FSIR ID and canonical
+hash, source/policy/model/config/source-map hashes, classification, return
+code, violated property and normalized event IDs, lowering/execution-manifest
+hashes, and complete filename-to-hash inventory. Bundle swaps or renames,
+coherent report/manifest substitutions, added or deleted artifacts, and
+identity drift fail closed rather than returning fresh trusted evidence. The
+response fixture label is taken only from that verified identity.
+
 - `core.17` is the canonical ordered passing run.
 - `core.18` is the canonical concurrent property violation.
 - `core.06` is an intentional zero-action result. It is not extraction failure
@@ -133,8 +143,8 @@ python3 -m unittest tests.test_bounded_workbench tests.test_frontend_workbench -
 The tests cover the exclusive API union, preserved semantic-check route,
 canonical hashes/IDs, strict counterexample linkage, zero-action rendering,
 all corpus fail-closed dispositions, core.30 reference-only separation, closed
-state controls, bounded approval expiry, responsive markers, and accessibility
-labels/live regions.
+state controls, bundle swap/rename/substitution/inventory rejection, bounded
+approval expiry, responsive markers, and accessibility labels/live regions.
 
 ## Browser retention
 

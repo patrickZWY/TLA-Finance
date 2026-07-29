@@ -440,6 +440,17 @@ def bounded_workbench(req: BoundedWorkbenchRequest):
                 status_code=404,
                 detail="unknown frozen corpus case",
             ) from exc
+        except FileNotFoundError as exc:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "bounded_evidence_unavailable",
+                    "message": (
+                        "Frozen case evidence failed identity or inventory "
+                        "validation."
+                    ),
+                },
+            ) from exc
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 

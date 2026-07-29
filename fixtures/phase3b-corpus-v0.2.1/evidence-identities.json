@@ -1,0 +1,72 @@
+{
+  "schema_version": "bounded-evidence-identities-0.1",
+  "identities": [
+    {
+      "case_id": "core.17",
+      "fixture_id": "fixture.phase3a.lifecycle.ordered",
+      "artifact_directory": "ordered",
+      "module_name": "FsirLifecycleOrdered",
+      "fsir_document_id": "fsir.safe_transfer_then_buy_order_sensitive",
+      "fsir_canonical_json_sha256": "c9a5838672199b11a9810a7dc5ad9a9c16aa52889f22aacbb712f8b11cfc28b1",
+      "source_document_sha256": "485eafc80eacc0542aaae296116b80c04d2f0fd151d69f4d5571a7f81445f67b",
+      "policy_snapshot_sha256": "f293e547c2b194716237181e320d12c09c941806b311315b95410f63a69db55b",
+      "model_sha256": "50836489a453ea2520cf5207e6e6f24dead291f13e6cb2f6ad2651169e7cf70c",
+      "config_sha256": "15d2ca0918c40660889fc5eb047caa5a6ba74f13be7eb6be883e596dc03724ce",
+      "source_map_sha256": "2e5cc55658015568d53806c9c7e23a11fae60f85b6ca166e127a821604fd367d",
+      "classification": "passed",
+      "returncode": 0,
+      "violated_property_ids": [],
+      "normalized_event_ids": [],
+      "lowering_manifest_sha256": "9ff38bb677455449eba2b517a19c6248ba5b56a77b960ee15e29bff30f13124b",
+      "execution_evidence_manifest_sha256": "0137bae092816c61ef37e2eb2dded380474f12dca03968fcfe3570976875d82b",
+      "artifact_inventory": {
+        "FsirLifecycleOrdered.cfg": "15d2ca0918c40660889fc5eb047caa5a6ba74f13be7eb6be883e596dc03724ce",
+        "FsirLifecycleOrdered.tla": "50836489a453ea2520cf5207e6e6f24dead291f13e6cb2f6ad2651169e7cf70c",
+        "classification.json": "d451277a701fd664c7477367f7b54771d8562d567a7e91b95cc91efbbda1ae93",
+        "execution-evidence-manifest.json": "0137bae092816c61ef37e2eb2dded380474f12dca03968fcfe3570976875d82b",
+        "execution-report.json": "c23347f820ff6f7325a012574daa25e8735ff6881419bf2bef3565dff98c9924",
+        "input.fsir.json": "bb37bb765abec79e1550f5d8e8a81b02ccafadbe4c7659976e362cfe4050d096",
+        "manifest.json": "9ff38bb677455449eba2b517a19c6248ba5b56a77b960ee15e29bff30f13124b",
+        "normalized-trace.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+        "source-map.json": "2e5cc55658015568d53806c9c7e23a11fae60f85b6ca166e127a821604fd367d",
+        "tlc-output.txt": "6fee01f0861e5d62303dabc66736fb308f419a97adafbf18e56ec01627435040"
+      }
+    },
+    {
+      "case_id": "core.18",
+      "fixture_id": "fixture.phase3a.lifecycle.concurrent",
+      "artifact_directory": "concurrent",
+      "module_name": "FsirLifecycleConcurrent",
+      "fsir_document_id": "fsir.safe_transfer_then_buy_order_sensitive",
+      "fsir_canonical_json_sha256": "0bd56bad4473087265d3a474a5a5511c97f9adaa41c387fe1710326c4af95f97",
+      "source_document_sha256": "485eafc80eacc0542aaae296116b80c04d2f0fd151d69f4d5571a7f81445f67b",
+      "policy_snapshot_sha256": "f293e547c2b194716237181e320d12c09c941806b311315b95410f63a69db55b",
+      "model_sha256": "dbbc7f15b80b5cf974b2a25e1ced5de13d5fdd1718bcd131f22594df51bdb11d",
+      "config_sha256": "15d2ca0918c40660889fc5eb047caa5a6ba74f13be7eb6be883e596dc03724ce",
+      "source_map_sha256": "304c9bff425de7c5fc7cc34ff8b6b94d6f074c931c8a233864f804c4abdc42bb",
+      "classification": "property_violation",
+      "returncode": 12,
+      "violated_property_ids": [
+        "property.safe_transfer_then_buy_order_sensitive.no_negative_cash"
+      ],
+      "normalized_event_ids": [
+        "event.buy.submit",
+        "event.buy.execute"
+      ],
+      "lowering_manifest_sha256": "3b3362a95b2bcecd82ff08f321e5d516ccb8b10df00439d382e60698fc4f306b",
+      "execution_evidence_manifest_sha256": "26c2d86f2c7e209a920569ca6e7f4255750562648e7040a304aa7562da44e5c3",
+      "artifact_inventory": {
+        "FsirLifecycleConcurrent.cfg": "15d2ca0918c40660889fc5eb047caa5a6ba74f13be7eb6be883e596dc03724ce",
+        "FsirLifecycleConcurrent.tla": "dbbc7f15b80b5cf974b2a25e1ced5de13d5fdd1718bcd131f22594df51bdb11d",
+        "classification.json": "56f24b0c000408febc81400c671ab7934ce16be9e7d71dd42f9aa67e226e396f",
+        "execution-evidence-manifest.json": "26c2d86f2c7e209a920569ca6e7f4255750562648e7040a304aa7562da44e5c3",
+        "execution-report.json": "2d332ef02a84fb97ee5c7a32f11174e55ec60038a1050ef378833fd33848a9fd",
+        "input.fsir.json": "b274efe0d87d604ae28529cdb303f80e8c10bc935d17187b01bb4d3a90c09eda",
+        "manifest.json": "3b3362a95b2bcecd82ff08f321e5d516ccb8b10df00439d382e60698fc4f306b",
+        "normalized-trace.json": "68c10cf307359a78adc65192d89a7a44c185ea0686f5d61b912e5672ddc1f850",
+        "source-map.json": "304c9bff425de7c5fc7cc34ff8b6b94d6f074c931c8a233864f804c4abdc42bb",
+        "tlc-output.txt": "9bdc83d5348e50fbf4e218f1febcb8a1c1e936ab895c45baa7b269944fc7e226"
+      }
+    }
+  ]
+}

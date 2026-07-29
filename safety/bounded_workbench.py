@@ -35,6 +35,7 @@ from safety.fsir_lowering import (
 ROOT = Path(__file__).resolve().parents[1]
 CORPUS_ROOT = ROOT / "fixtures" / "phase3b-corpus-v0.2.1"
 CORPUS_PATH = CORPUS_ROOT / "corpus.json"
+EVIDENCE_IDENTITIES_PATH = CORPUS_ROOT / "evidence-identities.json"
 CORE30_REFERENCE_ROOT = (
     ROOT / "contracts" / "phase4b-core30-reference-audit-v0.1"
 )
@@ -47,6 +48,9 @@ CORPUS_VERSION = "phase3b-corpus-0.2.1"
 RESPONSE_VERSION = "bounded-workbench-0.1"
 TLC_JAR_SHA256 = "936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88"
 CORPUS_SHA256 = "0467b64d0148d06ed103353f4c91dc2b76ce4b45ac5b6c13412d1c8e8181c7ce"
+EVIDENCE_IDENTITIES_SHA256 = (
+    "ea1eb4a946d139e3335a9d31ab2157e4574a1c5622908a4d185970d80dc92868"
+)
 CORE30_REFERENCE_LINKS_SHA256 = (
     "07184bbe7579d0d74d1727f8aac557ec82510504eee46426f6d156c9ae6104f3"
 )
@@ -170,8 +174,10 @@ def corpus_case_response(case_id: str, hero_stage: int | None = None) -> dict[st
     )
     _require_closed_controls(state, controls)
 
-    fixture_mode = _fixture_mode(case, stage)
-    canonical = _verified_fixture(fixture_mode) if fixture_mode else None
+    fixture_reference = _fixture_reference(case, stage)
+    canonical = (
+        _verified_fixture(*fixture_reference) if fixture_reference else None
+    )
     response = _base_response(
         state=state,
         controls=controls,
@@ -212,11 +218,7 @@ def corpus_case_response(case_id: str, hero_stage: int | None = None) -> dict[st
                 "disposition": "lower",
                 "reason_code": None,
                 "emits_artifacts": True,
-                "fixture_id": (
-                    "fixture.phase3a.lifecycle.concurrent"
-                    if fixture_mode == "concurrent"
-                    else "fixture.phase3a.lifecycle.ordered"
-                ),
+                "fixture_id": canonical["identity"]["fixture_id"],
                 "fail_closed": False,
             }
         )
@@ -237,7 +239,7 @@ def corpus_case_response(case_id: str, hero_stage: int | None = None) -> dict[st
 
     if canonical and case_id == "core.30":
         reference_link, stage4_decision = _core30_reference_contract(
-            fixture_mode, canonical
+            canonical
         )
         response["reference_evidence"] = {
             **canonical,
@@ -245,14 +247,8 @@ def corpus_case_response(case_id: str, hero_stage: int | None = None) -> dict[st
             "contract_match": False,
             "fixture_only": True,
             "reason_code": "hero_fixture_contract_unmapped",
-            "fixture_case_id": (
-                "core.18" if fixture_mode == "concurrent" else "core.17"
-            ),
-            "fixture_id": (
-                "fixture.phase3a.lifecycle.concurrent"
-                if fixture_mode == "concurrent"
-                else "fixture.phase3a.lifecycle.ordered"
-            ),
+            "fixture_case_id": canonical["identity"]["case_id"],
+            "fixture_id": canonical["identity"]["fixture_id"],
             "verdict_scope": "fixture_only",
             "event_id_scope": "fixture_only",
             "reference_link": reference_link,
@@ -474,13 +470,10 @@ def _mask_unavailable_hero_evidence(
 
 
 def _core30_reference_contract(
-    mode: str,
     canonical: dict[str, Any],
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Load and cross-check the independently accepted reference-only oracle."""
 
-    if mode not in {"concurrent", "ordered"}:
-        raise ValueError("core.30 reference mode is not closed")
     links_bytes = CORE30_REFERENCE_LINKS_PATH.read_bytes()
     decision_bytes = CORE30_STAGE4_DECISION_PATH.read_bytes()
     if _sha256_bytes(links_bytes) != CORE30_REFERENCE_LINKS_SHA256:
@@ -490,7 +483,7 @@ def _core30_reference_contract(
 
     contract = json.loads(links_bytes)
     decision = json.loads(decision_bytes)
-    fixture_id = f"fixture.phase3a.lifecycle.{mode}"
+    fixture_id = canonical["identity"]["fixture_id"]
     link = next(
         (
             item
@@ -501,6 +494,8 @@ def _core30_reference_contract(
     )
     if link is None:
         raise ValueError(f"core.30 reference link missing for {fixture_id}")
+    if link["fixture"]["referenced_case_id"] != canonical["identity"]["case_id"]:
+        raise ValueError("core.30 reference case identity drift")
 
     verification = canonical["verification"]
     evidence = canonical["evidence"]
@@ -796,14 +791,106 @@ def _infrastructure_response(
     return response
 
 
-def _verified_fixture(mode: str) -> dict[str, Any]:
-    fixture_root = CORPUS_ROOT / "backend-artifacts" / mode
+def _evidence_identity(
+    case_id: str,
+    fixture_id: str,
+) -> dict[str, Any]:
+    identity_bytes = EVIDENCE_IDENTITIES_PATH.read_bytes()
+    if _sha256_bytes(identity_bytes) != EVIDENCE_IDENTITIES_SHA256:
+        raise ValueError("evidence identity manifest hash drift")
+    manifest = json.loads(identity_bytes)
+    if manifest.get("schema_version") != "bounded-evidence-identities-0.1":
+        raise ValueError("unsupported evidence identity manifest")
+    matches = [
+        item
+        for item in manifest.get("identities", [])
+        if item.get("case_id") == case_id
+        and item.get("fixture_id") == fixture_id
+    ]
+    if len(matches) != 1:
+        raise ValueError("case-to-fixture evidence identity is not closed")
+    return deepcopy(matches[0])
+
+
+def _verify_artifact_inventory(
+    fixture_root: Path,
+    identity: dict[str, Any],
+) -> None:
+    expected = identity["artifact_inventory"]
+    if not fixture_root.is_dir() or fixture_root.is_symlink():
+        raise ValueError("evidence artifact directory is unavailable")
+    actual_names = {item.name for item in fixture_root.iterdir()}
+    missing = set(expected) - actual_names
+    if missing:
+        raise FileNotFoundError(
+            "evidence artifact inventory missing: "
+            + ", ".join(sorted(missing))
+        )
+    if actual_names - set(expected):
+        raise ValueError("evidence artifact inventory drift")
+    for name, expected_sha256 in expected.items():
+        path = fixture_root / name
+        if not path.is_file() or path.is_symlink():
+            raise ValueError(f"evidence artifact type drift: {name}")
+        if _sha256_bytes(path.read_bytes()) != expected_sha256:
+            raise ValueError(f"evidence artifact hash drift: {name}")
+
+
+def _verify_fixture_identity(
+    *,
+    identity: dict[str, Any],
+    document: FsirDocument,
+    lowered: LoweredFsir,
+    classification: TlcClassification,
+    trace: list[dict[str, Any]],
+    execution_manifest_sha256: str,
+) -> None:
+    manifest = lowered.manifest
+    actual = {
+        "module_name": lowered.module_name,
+        "fsir_document_id": document.meta.id,
+        "fsir_canonical_json_sha256": _sha256(
+            _canonical_payload(dump_fsir(document))
+        ),
+        "source_document_sha256": manifest["inputs"]["source_document"],
+        "policy_snapshot_sha256": manifest["inputs"]["policy_snapshot"],
+        "model_sha256": manifest["outputs"]["model"],
+        "config_sha256": manifest["outputs"]["config"],
+        "source_map_sha256": manifest["outputs"]["source_map"],
+        "classification": classification.kind,
+        "returncode": classification.returncode,
+        "violated_property_ids": list(
+            classification.violated_property_ids
+        ),
+        "normalized_event_ids": [
+            item["event_id"] for item in trace if item.get("event_id")
+        ],
+        "lowering_manifest_sha256": identity["artifact_inventory"][
+            "manifest.json"
+        ],
+        "execution_evidence_manifest_sha256": (
+            execution_manifest_sha256
+        ),
+    }
+    for field, value in actual.items():
+        if identity[field] != value:
+            raise ValueError(f"case-to-fixture identity drift: {field}")
+
+
+def _verified_fixture(case_id: str, fixture_id: str) -> dict[str, Any]:
+    identity = _evidence_identity(case_id, fixture_id)
+    fixture_root = (
+        CORPUS_ROOT
+        / "backend-artifacts"
+        / identity["artifact_directory"]
+    )
+    _verify_artifact_inventory(fixture_root, identity)
     raw_fsir = _load_json(fixture_root / "input.fsir.json")
     document = FsirDocument(**raw_fsir)
     manifest = _load_json(fixture_root / "manifest.json")
     source_map = _load_json(fixture_root / "source-map.json")
-    tla_path = next(fixture_root.glob("*.tla"))
-    cfg_path = next(fixture_root.glob("*.cfg"))
+    tla_path = fixture_root / f"{identity['module_name']}.tla"
+    cfg_path = fixture_root / f"{identity['module_name']}.cfg"
     lowered = LoweredFsir(
         module_name=manifest["module_name"],
         tla_text=tla_path.read_text(encoding="utf-8"),
@@ -827,13 +914,15 @@ def _verified_fixture(mode: str) -> dict[str, Any]:
         source_map,
     )
     if actual_classification != classification:
-        raise ValueError(f"{mode} fixture classification drift")
+        raise ValueError(f"{fixture_id} classification drift")
     trace = _load_json(fixture_root / "normalized-trace.json")
     if classification.kind in {"property_violation", "temporal_violation"}:
         if normalize_tlc_counterexample(raw_output, source_map) != trace:
-            raise ValueError(f"{mode} fixture normalized trace drift")
+            raise ValueError(f"{fixture_id} normalized trace drift")
     elif trace:
-        raise ValueError(f"{mode} passing fixture unexpectedly contains a trace")
+        raise ValueError(
+            f"{fixture_id} passing fixture unexpectedly contains a trace"
+        )
     execution_report = _load_json(fixture_root / "execution-report.json")
     execution_manifest = _load_json(
         fixture_root / "execution-evidence-manifest.json"
@@ -849,7 +938,16 @@ def _verified_fixture(mode: str) -> dict[str, Any]:
         execution_report=execution_report,
         execution_manifest=execution_manifest,
     )
+    _verify_fixture_identity(
+        identity=identity,
+        document=document,
+        lowered=lowered,
+        classification=classification,
+        trace=trace,
+        execution_manifest_sha256=execution_manifest_sha256,
+    )
     return {
+        "identity": deepcopy(identity),
         "fsir": _fsir_presentation(document),
         "source_map": source_map,
         "verification": _verification_payload(
@@ -863,7 +961,9 @@ def _verified_fixture(mode: str) -> dict[str, Any]:
         "evidence": {
             "status": "fresh",
             "trusted": True,
-            "fixture_mode": mode,
+            "identity_manifest_sha256": EVIDENCE_IDENTITIES_SHA256,
+            "case_id": identity["case_id"],
+            "fixture_id": identity["fixture_id"],
             "manifest_schema": execution_manifest["schema_version"],
             "execution_evidence_manifest_sha256": (
                 execution_manifest_sha256
@@ -1182,22 +1282,24 @@ def _projection_payload(
     }
 
 
-def _fixture_mode(
+def _fixture_reference(
     case: dict[str, Any],
     stage: dict[str, Any] | None,
-) -> str | None:
+) -> tuple[str, str] | None:
     if stage:
         if stage["stage"] in {2, 3, 4}:
-            return "concurrent"
+            return (
+                "core.18",
+                "fixture.phase3a.lifecycle.concurrent",
+            )
         if stage["stage"] in {5, 6, 7, 8}:
-            return "ordered"
+            return (
+                "core.17",
+                "fixture.phase3a.lifecycle.ordered",
+            )
         return None
     fixture_id = case["lowering_oracle"].get("fixture_id")
-    if fixture_id == "fixture.phase3a.lifecycle.ordered":
-        return "ordered"
-    if fixture_id == "fixture.phase3a.lifecycle.concurrent":
-        return "concurrent"
-    return None
+    return (case["id"], fixture_id) if fixture_id else None
 
 
 def _require_closed_controls(state: str, controls: dict[str, Any]) -> None:
