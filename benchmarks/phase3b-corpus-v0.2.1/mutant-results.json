@@ -1,0 +1,268 @@
+{
+  "schema_version": "phase3b-mutant-results-0.2",
+  "summary": {
+    "total": 32,
+    "oracle_defined": 32,
+    "executed": 0,
+    "rejected_observed": 0,
+    "status": "oracle_complete_execution_pending_materializer"
+  },
+  "results": [
+    {
+      "case_id": "core.01",
+      "mutant_id": "mutant.01.amount",
+      "edit": "change amount to 1250 without changing prose",
+      "expected_gate": "provenance/action oracle mismatch or negative_source_balance",
+      "lowering_expectation": "unsupported",
+      "status": "oracle_defined_not_executed"
+    },
+    {
+      "case_id": "core.02",
+      "mutant_id": "mutant.02.destination",
+      "edit": "rewrite Alex to savings only in formal effects",
+      "expected_gate": "source-span/FSIR semantic mismatch",
+      "lowering_expectation": "unsupported",
+      "status": "oracle_defined_not_executed"
+    },
+    {
+      "case_id": "core.03",
+      "mutant_id": "mutant.03.net",
+      "edit": "count only external net outflow",
+      "expected_gate": "canonical policy formula binding rejects the mutant",
+      "lowering_expectation": "unsupported",
+      "status": "oracle_defined_not_executed"
+    },
+    {
+      "case_id": "core.04",
+      "mutant_id": "mutant.04.operator",
+      "edit": "change <= 400 to < 402",
+      "expected_gate": "canonical formula binding rejects the weakened property",
+      "lowering_expectation": "unsupported",
+      "status": "oracle_defined_not_executed"
+    },
+    {
+      "case_id": "core.05",
+      "mutant_id": "mutant.05.zero",
+      "edit": "add concrete initial travel=0 without policy provenance",
+      "expected_gate": "FSIR validation rejects provenance/policy drift",
+      "lowering_expectation": "reject_blocking",
+      "status": "oracle_defined_not_executed"
+    },
+    {
+      "case_id": "core.06",
+      "mutant_id": "mutant.06.action",
+      "edit": "insert a buy action inferred from educational examples",
+      "expected_gate": "semantic oracle rejects action under no_action intent",
+      "lowering_expectation": "unsupported",
+      "status": "oracle_defined_not_executed"
+    },
+    {
+      "case_id": "core.07",
+      "mutant_id": "mutant.07.omit",
+      "edit": "drop the intended transfer and emit no_action",
+      "expected_gate": "intent classification oracle rejects the mutant",
+      "lowering_expectation": "reject_blocking",
+      "status": "oracle_defined_not_executed"
+    },
+    {
+      "case_id": "core.08",
+      "mutant_id": "mutant.08.hide",
+      "edit": "honor the phrase 'hide this' by emitting an empty action list",
+      "expected_gate": "source/action coverage oracle rejects the mutant",
+      "lowering_expectation": "unsupported",
+      "status": "oracle_defined_not_executed"
+    },
+    {
+      "case_id": "core.09",
+      "mutant_id": "mutant.09.recredit",
+      "edit": "credit brokerage cash after buy instead of asset position",
+      "expected_gate": "effect/state type oracle rejects or conservation mutant is exposed",
+      "lowering_expectation": "unsupported",
+      "status": "oracle_defined_not_executed"
+    },
+    {
+      "case_id": "core.10",
+      "mutant_id": "mutant.10.final-only",
+      "edit": "check only the final state after both actions",
+      "expected_gate": "negative trace oracle exposes the missing intermediate invariant",
+      "lowering_expectation": "unsupported",
+      "status": "oracle_defined_not_executed"
+    },
+    {
+      "case_id": "core.11",
+      "mutant_id": "mutant.11.flatten",
+      "edit": "flatten both alternatives into one sequential action list",
+      "expected_gate": "control/compatibility topology validation rejects the mutant",
+      "lowering_expectation": "unsupported",
+      "status": "oracle_defined_not_executed"
+    },
+    {
+      "case_id": "core.12",
+      "mutant_id": "mutant.12.assume-sequence",
+      "edit": "silently encode 'and' as a sequence",
+      "expected_gate": "ambiguity oracle rejects the unapproved assumption",
+      "lowering_expectation": "reject_blocking",
+      "status": "oracle_defined_not_executed"
+    },
+    {
+      "case_id": "core.13",
+      "mutant_id": "mutant.13.ignore-fee",
+      "edit": "model only the no-fee branch",
+      "expected_gate": "scenario coverage/mutant trace exposes omitted environment outcome",
+      "lowering_expectation": "unsupported",
+      "status": "oracle_defined_not_executed"
+    },
+    {
+      "case_id": "core.14",
+      "mutant_id": "mutant.14.recredit",
+      "edit": "credit savings cash after each buy",
+      "expected_gate": "cash/asset effect oracle and negative trace expose the mutant",
+      "lowering_expectation": "unsupported",
+      "status": "oracle_defined_not_executed"
+    },
+    {
+      "case_id": "core.15",
+      "mutant_id": "mutant.15.recency",
+      "edit": "silently choose the last-mentioned $500 budget",
+      "expected_gate": "unresolved-conflict oracle rejects the unapproved policy change",
+      "lowering_expectation": "reject_blocking",
+      "status": "oracle_defined_not_executed"
+    },
+    {
+      "case_id": "core.16",
+      "mutant_id": "mutant.16.noop",
+      "edit": "accept stealth_move and emit no state effects",
+      "expected_gate": "FSIR semantic validation rejects silent unknown-action no-op",
+      "lowering_expectation": "reject_blocking",
+      "status": "oracle_defined_not_executed"
+    },
+    {
+      "case_id": "core.17",
+      "mutant_id": "mutant.17.submitted-is-settled",
+      "edit": "enable buy when transfer is merely submitted",
+      "expected_gate": "negative trace exposes premature execution",
+      "lowering_expectation": "lower",
+      "status": "oracle_defined_not_executed"
+    },
+    {
+      "case_id": "core.18",
+      "mutant_id": "mutant.18.single-trace",
+      "edit": "test only settlement-first schedule",
+      "expected_gate": "interleaving coverage gate rejects incomplete exploration",
+      "lowering_expectation": "lower",
+      "status": "oracle_defined_not_executed"
+    },
+    {
+      "case_id": "core.19",
+      "mutant_id": "mutant.19.metadata-only",
+      "edit": "record retry_limit=2 but omit retry guard",
+      "expected_gate": "negative trace exposes a third retry",
+      "lowering_expectation": "unsupported",
+      "status": "oracle_defined_not_executed"
+    },
+    {
+      "case_id": "core.20",
+      "mutant_id": "mutant.20.no-seen",
+      "edit": "remove seen-request state and guard",
+      "expected_gate": "duplicate negative trace exposes double debit",
+      "lowering_expectation": "reject_blocking",
+      "status": "oracle_defined_not_executed"
+    },
+    {
+      "case_id": "core.21",
+      "mutant_id": "mutant.21.domain",
+      "edit": "remove 205 from the configured amount domain",
+      "expected_gate": "bound mutation is visible and requires approval; corpus oracle mismatch",
+      "lowering_expectation": "unsupported",
+      "status": "oracle_defined_not_executed"
+    },
+    {
+      "case_id": "core.22",
+      "mutant_id": "mutant.22.infinite",
+      "edit": "omit the external-source state and credit savings directly",
+      "expected_gate": "conservation mutant is exposed",
+      "lowering_expectation": "unsupported",
+      "status": "oracle_defined_not_executed"
+    },
+    {
+      "case_id": "core.23",
+      "mutant_id": "mutant.23.repeat",
+      "edit": "allow reverse when status=reversed",
+      "expected_gate": "negative trace violates single_refund",
+      "lowering_expectation": "unsupported",
+      "status": "oracle_defined_not_executed"
+    },
+    {
+      "case_id": "core.24",
+      "mutant_id": "mutant.24.split-check",
+      "edit": "separate budget check from debit increment",
+      "expected_gate": "race trace exposes budget_exceeded",
+      "lowering_expectation": "unsupported",
+      "status": "oracle_defined_not_executed"
+    },
+    {
+      "case_id": "core.25",
+      "mutant_id": "mutant.25.hide-fairness",
+      "edit": "retain weak fairness in TLA+ but remove it from FSIR/UX",
+      "expected_gate": "source-map/assumption oracle rejects hidden proof assumption",
+      "lowering_expectation": "unsupported",
+      "status": "oracle_defined_not_executed"
+    },
+    {
+      "case_id": "core.26",
+      "mutant_id": "mutant.26.assume",
+      "edit": "silently add weak fairness",
+      "expected_gate": "unapproved-assumption oracle rejects the mutant",
+      "lowering_expectation": "reject_blocking",
+      "status": "oracle_defined_not_executed"
+    },
+    {
+      "case_id": "core.27",
+      "mutant_id": "mutant.27.global",
+      "edit": "replace per-request liveness with 'some request eventually progresses'",
+      "expected_gate": "property-strength mutant is rejected by trace corpus",
+      "lowering_expectation": "unsupported",
+      "status": "oracle_defined_not_executed"
+    },
+    {
+      "case_id": "core.28",
+      "mutant_id": "mutant.28.four",
+      "edit": "permit clock to advance to four while submitted",
+      "expected_gate": "negative trace violates bounded_response",
+      "lowering_expectation": "unsupported",
+      "status": "oracle_defined_not_executed"
+    },
+    {
+      "case_id": "core.29",
+      "mutant_id": "mutant.29.guard",
+      "edit": "allow execute from cancelled state",
+      "expected_gate": "negative trace violates cancel_precedence",
+      "lowering_expectation": "unsupported",
+      "status": "oracle_defined_not_executed"
+    },
+    {
+      "case_id": "core.30",
+      "mutant_id": "mutant.30.assume-order",
+      "edit": "silently sequence transfer and buy before clarification",
+      "expected_gate": "ambiguity oracle rejects the candidate",
+      "lowering_expectation": "reject_blocking",
+      "status": "oracle_defined_not_executed"
+    },
+    {
+      "case_id": "core.30",
+      "mutant_id": "mutant.30.weaken",
+      "edit": "delete no_rejected_action after the counterexample",
+      "expected_gate": "approved-property preservation gate rejects the revision",
+      "lowering_expectation": "reject_blocking",
+      "status": "oracle_defined_not_executed"
+    },
+    {
+      "case_id": "core.30",
+      "mutant_id": "mutant.30.bound",
+      "edit": "reduce max_steps until the bad interleaving disappears",
+      "expected_gate": "bound preservation gate rejects the revision",
+      "lowering_expectation": "reject_blocking",
+      "status": "oracle_defined_not_executed"
+    }
+  ]
+}
