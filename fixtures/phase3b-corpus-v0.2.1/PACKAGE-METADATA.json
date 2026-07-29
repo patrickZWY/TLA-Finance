@@ -1,0 +1,13 @@
+{
+  "corpus_version": "phase3b-corpus-0.2.1",
+  "approved_lowering_commit": "d45efd09ffe5c77b89fcad1954d7959e54b7b8f3",
+  "source_archive": "phase3b-corpus-v0.2.1.tar.gz",
+  "source_archive_sha256": "bf3a8b16d8a876108799dcf784331f493121570d98b4b1b3b5ec08a09925188f",
+  "corpus_sha256": "0467b64d0148d06ed103353f4c91dc2b76ce4b45ac5b6c13412d1c8e8181c7ce",
+  "included_subset": [
+    "corpus.json",
+    "backend-artifacts/ordered",
+    "backend-artifacts/concurrent"
+  ],
+  "scope": "Approved corpus plus the two standalone canonical lifecycle fixtures required by the bounded workbench. Files are copied byte-for-byte from the approved archive; runtime verification rechecks canonical FSIR, model, config, source-map, classification, trace, and execution-evidence hashes."
+}

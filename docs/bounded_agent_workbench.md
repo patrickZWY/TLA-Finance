@@ -1,93 +1,145 @@
 # Bounded-agent workbench
 
-The Phase 3C frontend turns the existing semantic safety check into an
-inspectable agent loop without changing the backend contract.
+The workbench now has two deliberately separate trust paths.
 
-## Live path
+`POST /api/semantic-check` remains the legacy prose-to-normalized-action
+endpoint. Its UI projection is labeled heuristic and grants no execution
+authority.
 
-The primary action still sends:
+`POST /api/bounded-workbench` is the closed FSIR path. Its request is an
+exclusive tagged union:
+
+```json
+{"source":"corpus_case","case_id":"core.18"}
+```
+
+or:
+
+```json
+{
+  "source": "canonical_fsir",
+  "fsir": {"meta": "...complete closed FSIR v0.1 document..."},
+  "run_model_checker": false
+}
+```
+
+The bounded endpoint never accepts prose as FSIR and never falls back to model
+extraction. It validates `FsirDocument`, lowers only the approved bounded
+subset, verifies deterministic artifacts, preserves exact FSIR/source-map IDs,
+and keeps `passed`, `property_violation`, `temporal_violation`, and
+`infrastructure_failure` distinct. Raw TLC output, commands, and local paths
+remain server-side.
+
+## Frozen evidence
+
+`fixtures/phase3b-corpus-v0.2.1` contains the approved corpus plus the ordered
+and concurrent standalone canonical fixtures. Runtime loading checks the corpus
+hash, closed FSIR validation, canonical FSIR/model/config/source-map hashes,
+TLC classification, strict normalized trace, and execution-evidence manifest.
+The approved lowering anchor is
+`d45efd09ffe5c77b89fcad1954d7959e54b7b8f3`.
+
+- `core.17` is the canonical ordered passing run.
+- `core.18` is the canonical concurrent property violation.
+- `core.06` is an intentional zero-action result. It is not extraction failure
+  and offers no execution approval.
+- other `unsupported` or `reject_blocking` corpus cases return fail-closed
+  projections without claiming artifacts.
+
+## Core 30 correction
+
+The eight authored core.30 snapshots are available for contract inspection,
+but they are not exact source-linked verification evidence. The projection and
+packaged lifecycle fixtures differ in source document/spans, FSIR ID, action
+granularity/IDs, property contract, and bounds. The API
+therefore reports:
 
 ```text
-POST /api/semantic-check
+evidence_applicability = reference_only
+contract_match = false
+approval_eligible = false
 ```
 
-with the existing `user_message`, `finance_advice`, `policy`, and
-`run_model_checker` fields. The UI projects returned normalized actions into a
-reviewable FSIR view; this projection is explicitly labeled as UI-generated
-until the backend exposes the canonical FSIR contract.
+Core.30-derived FSIR/model/config/source-map hashes, classification, property
+verdict, freshness, and approval scope remain `null`. The separately identified
+core.17/core.18 fixture evidence stays inspectable and is labeled fixture-only.
+The one reference-only property correspondence is
+`property.no_negative_cash` to
+`property.safe_transfer_then_buy_order_sensitive.no_negative_cash`;
+`property.no_rejected_action` is unsupported by the fixture. The UI shows three
+business nodes as projection context and six lifecycle events as the fixture
+TLC step bound. It never combines those contracts into a verdict.
 
-## Deterministic demo paths
+The accepted reference-only oracle is checked in separately from corpus
+evidence at `contracts/phase4b-core30-reference-audit-v0.1/`. Its
+`reference-links.json` and stage-4 decision are hash-pinned to the independently
+validated audit archive (`0a3088c0…6ccdb`, PASS; 10/10 negative mutants
+rejected). API responses expose the exact selected link and decision under
+`reference_evidence`; they are explicitly marked `corpus_evidence = false`.
 
-Enable **Replay deterministic demo evidence** after choosing one of the three
-hero scenarios, or open:
+## State-driven controls
 
-- `/?fixture=hero_safe`
-- `/?fixture=hero_unsafe`
-- `/?fixture=hero_clarification`
+Every API response includes a closed Boolean envelope for:
 
-Fixture replay is visibly labeled and never impersonates a live model or TLC
-run. The fixture contract lives in `public/workbench-demo-fixtures.json`.
+`approve`, `edit`, `reject`, `stop`, `revise`, `rerun`, `clarify`,
+`inspect_evidence`, `resume`, `new_goal`, and `verify`.
 
-The unsafe flow supports a counterexample-guided reorder:
+The browser validates that envelope against the local closed state matrix
+before rendering it. During `verification_running`, only Stop remains
+available. `stopped` exposes only Resume and New goal. A change invalidates
+prior evidence, and reference-only/stale/infrastructure/unsupported states
+cannot enable bounded approval. Approval also requires all canonical nodes to
+be reviewed and a future expiry to be selected. This sandbox records the
+bounded scope but never executes a financial action.
 
-1. replay `hero_unsafe`;
-2. inspect the source-linked action nodes and earliest violating state;
-3. choose **Propose safer revision**;
-4. re-run the revised plan with `hero_safe` or the live endpoint;
-5. approve every FSIR action;
-6. record bounded approval for the displayed model version and bounds.
+## Local demo
 
-The sandbox records approval but never executes a trade or transfer.
-
-## Trust and retention
-
-The header begins in the neutral **Verifier status not checked** state. A ready
-or local verifier is never inferred from page load. The badge changes only
-after live endpoint evidence, deterministic fixture replay, or a request
-failure, and it directs the reviewer to the bounded evidence for configuration
-details.
-
-Goal, advice, and guardrail drafts are stored in browser `localStorage`. This is
-disclosed beside the input controls. **Clear local data** removes the stored
-draft, restores example defaults, clears result/review/activity state, disables
-fixture replay, restores the TLC preference, and returns verifier status to
-unchecked.
-
-## Explicit UI states
-
-- `clarification_required`
-- `ready_for_review`
-- `verification_running`
-- `violation_found`
-- `verification_unavailable`
-- `revision_proposed`
-- `reverification_required`
-- `checks_passed`
-- `bounded_approval_required`
-- `stopped`
-
-Changing the goal, plan, policy, or model-checker setting invalidates prior
-evidence and blocks approval until the plan is verified again.
-
-## Regression check
+Use the existing project environment (or install `requirements.txt`), then:
 
 ```bash
-python3 -m unittest tests.test_frontend_workbench
+SAFETY_RUN_TLC=0 python3 -m uvicorn api.index:app --host 127.0.0.1 --port 8000
 ```
 
-The checks cover the preserved endpoint contract, UI-state matrix, agent/review
-controls, bounded verdict metadata, fixture outcomes, shortest counterexample,
-and baseline responsive/accessibility markers.
+Open:
 
-## Current boundary
+- <http://127.0.0.1:8000/?case=core.17> — canonical ordered pass;
+- <http://127.0.0.1:8000/?case=core.18> — canonical concurrent violation;
+- <http://127.0.0.1:8000/?case=core.06> — intentional no-action pass;
+- <http://127.0.0.1:8000/?case=core.30&stage=4> — fail-closed
+  reference-only hero audit.
 
-The current endpoint returns normalized actions rather than canonical FSIR
-source maps, properties, hashes, and approval metadata. Therefore:
+The original deterministic UI fixtures remain available with
+`/?fixture=hero_safe`, `hero_unsafe`, or `hero_clarification`, but are visibly
+labeled as fixture replay rather than canonical FSIR evidence.
 
-- source spans are best-effort UI matches and are labeled as such;
-- the displayed FSIR version is a run-scoped UI projection;
-- approval is local UI state only;
-- no backend action or execution authority is added.
+To run TLC for a submitted canonical FSIR, set `TLA_TOOLS_JAR` to the approved
+jar whose SHA-256 is
+`936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88`.
+Absent or mismatched tooling returns `infrastructure_failure`; it does not
+silently use another jar.
 
-These limitations keep the slice honest and allow later integration with the
-typed FSIR/lowering work without coupling this branch to backend files.
+## Verification
+
+```bash
+SAFETY_RUN_TLC=0 python3 -m unittest discover -s tests -v
+```
+
+Focused checks:
+
+```bash
+python3 -m unittest tests.test_bounded_workbench tests.test_frontend_workbench -v
+```
+
+The tests cover the exclusive API union, preserved semantic-check route,
+canonical hashes/IDs, strict counterexample linkage, zero-action rendering,
+all corpus fail-closed dispositions, core.30 reference-only separation, closed
+state controls, bounded approval expiry, responsive markers, and accessibility
+labels/live regions.
+
+## Browser retention
+
+Goal, advice, and guardrail drafts are stored in browser `localStorage`; this
+is disclosed beside the inputs. **Clear local data** removes the draft and
+resets review, approval, activity, fixture, and verifier state. Frozen corpus
+inputs are resolved server-side and cannot be mutated by editing the displayed
+form.

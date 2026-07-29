@@ -1,0 +1,13 @@
+{
+  "contract_role": "reference_only",
+  "source_archive": "phase4b-core30-refinement-audit-v0.1.tar.gz",
+  "source_archive_sha256": "0a3088c02ecf07c2b198535f618bfe277a676716212b2b671f80f001a306ccdb",
+  "reference_links_sha256": "07184bbe7579d0d74d1727f8aac557ec82510504eee46426f6d156c9ae6104f3",
+  "stage4_oracle_decision_sha256": "9c963534c269b91210a1c9e78c4ca22c48209ee6bae85c77d6171021f5ea4e17",
+  "corpus_evidence": false,
+  "validation": {
+    "validator_result": "PASS",
+    "negative_mutants_rejected": 10,
+    "negative_mutants_total": 10
+  }
+}

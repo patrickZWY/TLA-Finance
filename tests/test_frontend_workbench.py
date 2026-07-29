@@ -21,6 +21,14 @@ class BoundedAgentWorkbenchTests(unittest.TestCase):
         ):
             self.assertIn(field, HTML)
 
+    def test_separate_closed_fsir_endpoint_is_used_for_bounded_cases(self):
+        self.assertIn("fetch('/api/bounded-workbench'", HTML)
+        self.assertIn("source: 'corpus_case'", HTML)
+        self.assertIn("bounded_case_id: 'core.17'", HTML)
+        self.assertIn("bounded_case_id: 'core.18'", HTML)
+        self.assertIn("bounded_case_id: 'core.06'", HTML)
+        self.assertNotIn("source: 'prose'", HTML)
+
     def test_agreed_ui_state_matrix_is_explicit(self):
         for state in (
             "clarification_required",
@@ -50,11 +58,39 @@ class BoundedAgentWorkbenchTests(unittest.TestCase):
         for review_action in ("approve", "edit", "reject"):
             self.assertIn(f"['{review_action}'", HTML)
 
+    def test_machine_readable_controls_are_enforced_from_closed_state_matrix(self):
+        for control in (
+            "approve",
+            "edit",
+            "reject",
+            "stop",
+            "revise",
+            "rerun",
+            "clarify",
+            "inspect_evidence",
+            "resume",
+            "new_goal",
+            "verify",
+        ):
+            self.assertIn(control, HTML)
+        self.assertIn("function validateControlEnvelope(state, controls)", HTML)
+        self.assertIn("function applyControlEnvelope(controls)", HTML)
+        self.assertIn("button.disabled = !reviewState", HTML)
+        self.assertIn("boundedApprovalBtn", HTML)
+        self.assertIn("approvalExpiry", HTML)
+
     def test_verdict_exposes_bounded_provenance(self):
         for field in ("property:", "backend:", "bounds:", "model:"):
             self.assertIn(field, HTML)
         self.assertIn("No configured guardrail was violated", HTML)
         self.assertIn("not a general claim of financial safety", HTML)
+        for marker in (
+            "FSIR hash:",
+            "source_map",
+            "violated_property_ids",
+            "fixture_only_verification",
+        ):
+            self.assertIn(marker, HTML)
 
     def test_hero_fixture_matrix(self):
         self.assertEqual(
@@ -90,6 +126,8 @@ class BoundedAgentWorkbenchTests(unittest.TestCase):
             "@media (max-width: 620px)",
         ):
             self.assertIn(marker, HTML)
+        self.assertIn('id="contractNotice" role="alert"', HTML)
+        self.assertIn('aria-label="Agent workflow"', HTML)
 
     def test_verifier_status_is_neutral_until_evidence_exists(self):
         self.assertIn(
@@ -119,6 +157,31 @@ class BoundedAgentWorkbenchTests(unittest.TestCase):
             "runTlc",
         ):
             self.assertIn(reset_marker, clear_body)
+
+    def test_zero_action_and_reference_only_hero_are_explicit(self):
+        self.assertIn("Intentional zero-action result", HTML)
+        self.assertIn("This is not an extraction failure", HTML)
+        self.assertIn("Reference evidence only", HTML)
+        self.assertIn("contract_match", HTML)
+        self.assertIn("evidence_applicability", HTML)
+        self.assertIn("fixture-only", HTML)
+        self.assertIn("core.30 verification and approval remain unavailable", HTML)
+        self.assertIn("reference_link:", HTML)
+        self.assertIn("stage4_oracle_decision:", HTML)
+        self.assertIn("audit:", HTML)
+        self.assertIn("overflow-wrap: anywhere", HTML)
+
+    def test_running_and_stopped_states_cannot_leave_stale_controls_active(self):
+        running = HTML.split("verification_running:", 1)[1].split(
+            "violation_found:", 1
+        )[0]
+        self.assertIn("stop: true", running)
+        for disallowed in ("edit: true", "approve: true", "verify: true"):
+            self.assertNotIn(disallowed, running)
+        stopped = HTML.split("stopped:", 1)[1].split("});", 1)[0]
+        self.assertIn("resume: true", stopped)
+        self.assertIn("new_goal: true", stopped)
+        self.assertNotIn("stop: true", stopped)
 
 
 if __name__ == "__main__":

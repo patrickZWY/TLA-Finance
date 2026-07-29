@@ -1,0 +1,17 @@
+{
+  "schema_version": "core30-stage4-oracle-decision-0.1",
+  "status": "reference_only",
+  "chosen_semantic_property_id": "property.no_negative_cash",
+  "chosen_backend_property_id": "property.safe_transfer_then_buy_order_sensitive.no_negative_cash",
+  "reason": "The concurrent fixture reaches negative brokerage cash and TLC classifies this invariant.",
+  "unsupported_property": {
+    "id": "property.no_rejected_action",
+    "reason_codes": [
+      "no_rejected_state_in_fixture",
+      "no_backend_property_formula",
+      "not_executed_by_tlc"
+    ],
+    "may_be_claimed_for_core30": false
+  },
+  "upgrade_rule": "Reference-fixture mapping does not upgrade core.30 property status; exact core.30 evidence is required."
+}

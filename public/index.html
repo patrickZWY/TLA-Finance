@@ -96,7 +96,7 @@
     button.primary {
       background: var(--accent);
       border-color: var(--accent);
-      color: #07111d;
+      color: #ffffff;
     }
     button:disabled { opacity: .55; cursor: not-allowed; }
     .toggle {
@@ -235,7 +235,7 @@
     .stage.active .stage-dot { color: white; border-color: var(--accent); background: var(--accent); }
     .stage.done .stage-dot { color: var(--accent); border-color: #9fcbb5; background: #e6f4ec; }
     .verdict-hero { display: none; padding: 18px; border: 1px solid var(--border); border-radius: 9px; background: var(--panel2); }
-    .verdict-hero.visible { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px; align-items: start; }
+    .verdict-hero.visible { display: grid; grid-template-columns: minmax(260px, .8fr) minmax(0, 1.2fr); gap: 18px; align-items: start; }
     .verdict-label { display: flex; gap: 7px; align-items: center; font-size: 12px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
     .verdict-hero.blocked .verdict-label { color: var(--bad); }
     .verdict-hero.passed .verdict-label { color: var(--ok); }
@@ -243,7 +243,7 @@
     .verdict-hero h3 { margin: 6px 0 4px; font-size: clamp(20px, 3vw, 29px); letter-spacing: -.03em; }
     .verdict-hero p { margin: 0; color: var(--muted); max-width: 760px; }
     .verdict-meta { display: grid; gap: 5px; min-width: 210px; font: 11px ui-monospace, monospace; color: var(--muted); }
-    .verdict-meta span { display: block; padding: 5px 7px; border: 1px solid var(--border); border-radius: 5px; background: var(--panel); }
+    .verdict-meta span { display: block; padding: 5px 7px; border: 1px solid var(--border); border-radius: 5px; background: var(--panel); overflow-wrap: anywhere; }
     .fsir-card { grid-column: 1 / -1; }
     .fsir-meta { padding: 10px 12px; display: flex; gap: 6px; flex-wrap: wrap; border-bottom: 1px solid var(--border); background: var(--panel2); }
     .fsir-meta .badge { background: var(--panel); }
@@ -276,6 +276,11 @@
     .retention-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--panel2); color: var(--muted); font-size: 12px; }
     .retention-row button { flex: none; padding: 5px 8px; font-size: 11px; }
     .storage-status { min-height: 16px; color: var(--muted); font-size: 12px; }
+    .contract-notice { display: none; border: 1px solid #d7a74488; background: #fff8e8; color: #66460d; border-radius: 7px; padding: 10px 12px; font-size: 12px; line-height: 1.45; }
+    .contract-notice.visible { display: block; }
+    .hero-stage-row { display: none; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 8px; }
+    .hero-stage-row.visible { display: grid; }
+    [hidden] { display: none !important; }
     .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
     @media (max-width: 980px) {
       main, .result-grid, .grid2, .journey-layout { grid-template-columns: 1fr; }
@@ -295,6 +300,7 @@
       .approval-bar button { width: 100%; }
       .activity-item { grid-template-columns: 1fr; gap: 2px; }
       .retention-row { align-items: stretch; flex-direction: column; }
+      .hero-stage-row.visible { grid-template-columns: 1fr; }
     }
     @media (prefers-reduced-motion: reduce) {
       html { scroll-behavior: auto; }
@@ -329,6 +335,10 @@
           <p id="agentStatus" aria-live="polite">Waiting for a goal and proposed plan. The agent will not execute trades or transfers.</p>
         </div>
         <div class="agent-actions">
+          <button type="button" id="clarifyBtn" hidden>Answer clarification</button>
+          <button type="button" id="inspectEvidenceBtn" hidden>Inspect evidence</button>
+          <button type="button" id="resumeAgentBtn" hidden>Resume agent</button>
+          <button type="button" id="newGoalBtn" hidden>New goal</button>
           <button type="button" id="revisionBtn" style="display:none;">Propose safer revision</button>
           <button type="button" id="editGoalBtn">Edit goal</button>
           <button type="button" class="stop-button" id="stopAgentBtn">Stop agent</button>
@@ -350,6 +360,22 @@
           Scenario
           <select id="exampleSelect"></select>
         </label>
+        <div class="hero-stage-row" id="heroStageRow">
+          <label>
+            Reference-only hero stage
+            <select id="heroStageSelect">
+              <option value="1">1 · Needs clarification</option>
+              <option value="2">2 · Review interpretation</option>
+              <option value="3">3 · Verification in progress</option>
+              <option value="4">4 · Plan blocked</option>
+              <option value="5">5 · Safer revision proposed</option>
+              <option value="6">6 · Changes need verification</option>
+              <option value="7">7 · No configured guardrail was violated</option>
+              <option value="8">8 · Ready for bounded approval</option>
+            </select>
+          </label>
+          <button type="button" id="loadHeroStageBtn">Load stage</button>
+        </div>
         <label>
           Agent goal and context
           <textarea id="userMessage" placeholder="Example: I want to clean up my cash before the end of the week."></textarea>
@@ -376,7 +402,7 @@
     <section>
       <div class="section-head">
         <h2>Active guardrails</h2>
-        <button onclick="resetPolicy()">Reset policy</button>
+        <button id="resetPolicyBtn" onclick="resetPolicy()">Reset policy</button>
       </div>
       <div class="body">
         <div class="grid2">
@@ -419,6 +445,7 @@
       </div>
       <div class="approval-bar">
         <div class="approval-copy" id="approvalCopy"><strong>Approval blocked.</strong> Review every required node first.</div>
+        <label>Approval expires before execution<input type="datetime-local" id="approvalExpiry" /></label>
         <button type="button" class="primary" id="boundedApprovalBtn" disabled>Approve verified scope</button>
       </div>
     </section>
@@ -431,6 +458,7 @@
         </div>
       </div>
       <div class="body">
+        <div class="contract-notice" id="contractNotice" role="alert"></div>
         <div class="verdict-hero" id="verdictHero" aria-live="polite">
           <div>
             <div class="verdict-label" id="verdictLabel">Not run</div>
@@ -512,6 +540,59 @@
   <script>
     const STORAGE_KEY = 'semantic_safety_workbench_v1';
     const examples = [
+      {
+        name: 'Canonical bounded pass · core.17',
+        bounded_case_id: 'core.17',
+        user: 'Fund the brokerage first, then buy only after the cash lands.',
+        advice: 'Frozen corpus case core.17. The server returns canonical FSIR, source-map IDs, and hash-bound ordered TLC evidence.',
+        policy: {
+          budget: 600,
+          max_individual_action_amount: 300,
+          account_balances: { checking: 600, brokerage: 0, savings: 100 },
+          allowed_destination_accounts: ['brokerage', 'savings'],
+          allowed_action_types: ['buy', 'transfer'],
+        },
+      },
+      {
+        name: 'Canonical bounded violation · core.18',
+        bounded_case_id: 'core.18',
+        user: 'Let funding and the brokerage buy proceed concurrently.',
+        advice: 'Frozen corpus case core.18. The server returns the canonical event IDs, exact violated property, and normalized TLC trace.',
+        policy: {
+          budget: 600,
+          max_individual_action_amount: 300,
+          account_balances: { checking: 600, brokerage: 0, savings: 100 },
+          allowed_destination_accounts: ['brokerage', 'savings'],
+          allowed_action_types: ['buy', 'transfer'],
+        },
+      },
+      {
+        name: 'Intentional no-action pass · core.06',
+        bounded_case_id: 'core.06',
+        user: 'Explain diversified index funds, but do not place or propose any transaction.',
+        advice: 'Educational information only; no financial action is requested or proposed.',
+        policy: {
+          budget: 0,
+          max_individual_action_amount: 0,
+          account_balances: {},
+          allowed_destination_accounts: ['none'],
+          allowed_action_types: ['buy'],
+        },
+      },
+      {
+        name: 'Hero contract audit · core.30 (reference only)',
+        bounded_case_id: 'core.30',
+        hero_stage: 1,
+        user: 'Move $300 from checking to brokerage and buy $300 of VTI as soon as possible.',
+        advice: 'This eight-stage projection is demonstrative. The packaged lifecycle fixture is shown separately and cannot verify or authorize core.30.',
+        policy: {
+          budget: 900,
+          max_individual_action_amount: 500,
+          account_balances: { checking: 1200, brokerage: 0, savings: 200 },
+          allowed_destination_accounts: ['brokerage'],
+          allowed_action_types: ['buy', 'transfer'],
+        },
+      },
       {
         name: 'Soft recommendation, no actions',
         user: 'I am 28 and have a moderate risk tolerance.',
@@ -642,12 +723,26 @@ The workbench shall evaluate both choices before approving either one.`,
       BOUNDED_APPROVAL_REQUIRED: 'bounded_approval_required',
       STOPPED: 'stopped',
     });
+    const CONTROL_KEYS = ['approve', 'edit', 'reject', 'stop', 'revise', 'rerun', 'clarify', 'inspect_evidence', 'resume', 'new_goal', 'verify'];
+    const CONTROL_MATRIX = Object.freeze({
+      clarification_required: { edit: true, stop: true, clarify: true },
+      ready_for_review: { edit: true, reject: true, stop: true, verify: true },
+      verification_running: { stop: true },
+      violation_found: { stop: true, revise: true, inspect_evidence: true },
+      verification_unavailable: { edit: true, stop: true, rerun: true },
+      revision_proposed: { edit: true, reject: true, stop: true },
+      reverification_required: { edit: true, reject: true, stop: true, verify: true },
+      checks_passed: { edit: true, stop: true, inspect_evidence: true },
+      bounded_approval_required: { approve: true, edit: true, reject: true, stop: true, inspect_evidence: true },
+      stopped: { resume: true, new_goal: true },
+    });
     let demoFixtures = {};
     let currentResult = null;
     let currentRunId = null;
     let currentController = null;
     let reviewStates = new Map();
     let activity = [];
+    let currentControls = closedControls(UI_STATES.READY_FOR_REVIEW);
 
     async function initialize() {
       const select = document.getElementById('exampleSelect');
@@ -676,6 +771,14 @@ The workbench shall evaluate both choices before approving either one.`,
         fixtureToggle.parentElement.title = 'Deterministic fixture evidence is unavailable.';
       }
       document.getElementById('editGoalBtn').addEventListener('click', () => {
+        const selected = examples[Number(document.getElementById('exampleSelect').value || 0)];
+        if (selected.bounded_case_id) {
+          currentResult = null;
+          document.getElementById('exampleSelect').focus();
+          setAgentState(UI_STATES.READY_FOR_REVIEW, 'Frozen corpus inputs cannot be edited in place. Choose another scenario or submit canonical FSIR through the bounded API.');
+          addActivity('system', 'Edit requested for a frozen corpus case; prior evidence was invalidated and no fixture data was mutated.');
+          return;
+        }
         document.getElementById('userMessage').focus();
         if (currentResult) {
           invalidateEvidence('Editing the goal invalidates prior review and evidence.');
@@ -685,6 +788,22 @@ The workbench shall evaluate both choices before approving either one.`,
       });
       document.getElementById('revisionBtn').addEventListener('click', proposeSaferRevision);
       document.getElementById('stopAgentBtn').addEventListener('click', stopAgent);
+      document.getElementById('clarifyBtn').addEventListener('click', () => advanceHeroStage(2));
+      document.getElementById('inspectEvidenceBtn').addEventListener('click', () => {
+        document.getElementById('violationVisualization').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+      document.getElementById('resumeAgentBtn').addEventListener('click', () => {
+        setAgentState(UI_STATES.READY_FOR_REVIEW, 'Agent resumed. Review the inputs before starting a new bounded check.');
+      });
+      document.getElementById('newGoalBtn').addEventListener('click', () => {
+        resetReviewSurface();
+        document.getElementById('userMessage').focus();
+        setAgentState(UI_STATES.READY_FOR_REVIEW, 'Enter a new goal. No prior evidence can authorize it.');
+      });
+      document.getElementById('loadHeroStageBtn').addEventListener('click', runSemanticCheck);
+      document.getElementById('heroStageSelect').addEventListener('change', () => {
+        if (currentResult) invalidateEvidence('The selected hero projection stage changed; prior evidence is not current.');
+      });
       document.getElementById('clearLocalDataBtn').addEventListener('click', clearLocalData);
       document.getElementById('boundedApprovalBtn').addEventListener('click', approveBoundedScope);
       document.getElementById('fsirList').addEventListener('click', handleReviewControl);
@@ -693,7 +812,20 @@ The workbench shall evaluate both choices before approving either one.`,
           if (currentResult) invalidateEvidence('Inputs changed after verification; the displayed evidence is stale.');
         }));
       addActivity('system', 'Workbench ready; no external action authority granted.');
-      const requestedFixture = new URLSearchParams(window.location.search).get('fixture');
+      setAgentState(UI_STATES.READY_FOR_REVIEW, 'Waiting for a goal and proposed plan. The agent will not execute trades or transfers.');
+      const query = new URLSearchParams(window.location.search);
+      const requestedCase = query.get('case');
+      const caseIndex = examples.findIndex((example) => example.bounded_case_id === requestedCase);
+      if (caseIndex >= 0) {
+        select.value = String(caseIndex);
+        loadExample();
+        if (requestedCase === 'core.30' && query.get('stage')) {
+          document.getElementById('heroStageSelect').value = query.get('stage');
+        }
+        await runSemanticCheck();
+        return;
+      }
+      const requestedFixture = query.get('fixture');
       const fixtureIndex = examples.findIndex((example) => example.fixture_key === requestedFixture);
       if (fixtureIndex >= 0 && demoFixtures[requestedFixture]) {
         select.value = String(fixtureIndex);
@@ -722,8 +854,24 @@ The workbench shall evaluate both choices before approving either one.`,
       document.getElementById('userMessage').value = example.user;
       document.getElementById('financeAdvice').value = example.advice;
       fillPolicy(example.policy);
+      const bounded = Boolean(example.bounded_case_id);
+      const hero = example.bounded_case_id === 'core.30';
+      document.getElementById('heroStageRow').classList.toggle('visible', hero);
+      document.getElementById('heroStageSelect').value = String(example.hero_stage || 1);
+      document.getElementById('fixtureReplay').checked = false;
+      document.getElementById('fixtureReplay').disabled = bounded;
+      document.getElementById('runTlc').checked = true;
+      document.getElementById('runTlc').disabled = bounded;
+      ['policyBudget', 'policyMaxAction', 'policyBalances', 'policyDestinations', 'policyActionTypes']
+        .forEach((id) => { document.getElementById(id).disabled = bounded; });
+      document.getElementById('resetPolicyBtn').disabled = bounded;
+      document.getElementById('contractNotice').className = 'contract-notice';
+      document.getElementById('contractNotice').textContent = '';
       clearError();
       resetReviewSurface();
+      setAgentState(UI_STATES.READY_FOR_REVIEW, bounded
+        ? `Frozen ${example.bounded_case_id} selected. The server will resolve the approved corpus contract; local fields cannot override it.`
+        : 'Edit the goal and proposed plan, then ask the agent to review them.');
       saveState();
     }
 
@@ -772,6 +920,8 @@ The workbench shall evaluate both choices before approving either one.`,
     async function runSemanticCheck() {
       const runBtn = document.getElementById('runBtn');
       clearError();
+      const example = examples[Number(document.getElementById('exampleSelect').value || 0)];
+      const boundedCaseId = example.bounded_case_id;
       let policy;
       try {
         policy = readPolicy();
@@ -805,9 +955,28 @@ The workbench shall evaluate both choices before approving either one.`,
 
       try {
         let data;
-        const example = examples[Number(document.getElementById('exampleSelect').value || 0)];
         const useFixture = document.getElementById('fixtureReplay').checked;
-        if (useFixture && example.fixture_key && demoFixtures[example.fixture_key]) {
+        if (boundedCaseId) {
+          const request = {
+            source: 'corpus_case',
+            case_id: boundedCaseId,
+          };
+          if (boundedCaseId === 'core.30') {
+            request.hero_stage = Number(document.getElementById('heroStageSelect').value);
+          }
+          const res = await fetch('/api/bounded-workbench', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            signal: currentController.signal,
+            body: JSON.stringify(request),
+          });
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(typeof err.detail === 'string' ? err.detail : `Server error ${res.status}`);
+          }
+          data = await res.json();
+          setSystemHealth(data.evidence?.trusted ? 'Verified bounded evidence' : 'Fail-closed bounded response', data.evidence?.trusted ? 'ok' : 'warn');
+        } else if (useFixture && example.fixture_key && demoFixtures[example.fixture_key]) {
           await new Promise((resolve) => window.setTimeout(resolve, 450));
           if (currentController.signal.aborted) throw new DOMException('Agent stopped', 'AbortError');
           data = JSON.parse(JSON.stringify(demoFixtures[example.fixture_key]));
@@ -834,7 +1003,12 @@ The workbench shall evaluate both choices before approving either one.`,
         }
         currentResult = data;
         saveState();
-        renderResult(data);
+        if (data.schema_version === 'bounded-workbench-0.1') {
+          currentRunId = data.verification?.fsir_hash || `${data.case_id || 'bounded'}:${data.hero?.stage || 'current'}`;
+          renderBoundedWorkbenchResult(data);
+        } else {
+          renderResult(data);
+        }
       } catch (err) {
         if (err.name === 'AbortError') return;
         setError(err.message);
@@ -844,10 +1018,267 @@ The workbench shall evaluate both choices before approving either one.`,
         setAgentState(UI_STATES.VERIFICATION_UNAVAILABLE, 'The verification service did not return evidence. No safety conclusion was made.');
         addActivity('system', `Verification unavailable: ${err.message}`);
       } finally {
-        runBtn.disabled = false;
-        runBtn.textContent = 'Ask agent to review';
         currentController = null;
+        if (currentResult?.schema_version === 'bounded-workbench-0.1') {
+          applyControlEnvelope(currentResult.agent.controls);
+        } else if (document.getElementById('agentStatus').dataset.state !== UI_STATES.STOPPED) {
+          runBtn.disabled = false;
+          runBtn.textContent = 'Ask agent to review';
+        }
       }
+    }
+
+    function renderBoundedWorkbenchResult(data) {
+      const state = data.agent.state;
+      currentControls = validateControlEnvelope(state, data.agent.controls);
+      renderBoundedFsirReview(data);
+      renderBoundedWorkbenchVerdict(data);
+
+      document.getElementById('actionsJson').textContent = JSON.stringify(data.fsir || {}, null, 2);
+      renderFindings((data.verification?.properties || []).filter((item) => item.status === 'violated').map((item) => ({
+        code: item.finding_code || item.id,
+        message: `${item.id} · ${item.status}`,
+      })));
+      document.getElementById('tlcStatus').textContent = JSON.stringify({
+        classification: data.verification?.classification,
+        status: data.verification?.status,
+        violated_property_ids: data.verification?.violated_property_ids || [],
+        reason_code: data.verification?.reason_code,
+        properties: data.verification?.properties || [],
+      }, null, 2);
+      document.getElementById('artifactStatus').textContent = JSON.stringify({
+        lowering: data.lowering,
+        evidence: data.evidence,
+        manifest_hashes: {
+          fsir: data.verification?.fsir_hash,
+          model: data.verification?.model_hash,
+          config: data.verification?.config_hash,
+          source_map: data.verification?.source_map_hash,
+        },
+        reference_evidence: data.reference_evidence ? {
+          evidence_applicability: data.reference_evidence.evidence_applicability,
+          contract_match: data.reference_evidence.contract_match,
+          fixture_case_id: data.reference_evidence.fixture_case_id,
+          fixture_id: data.reference_evidence.fixture_id,
+          verdict_scope: data.reference_evidence.verdict_scope,
+          event_id_scope: data.reference_evidence.event_id_scope,
+          reference_link: data.reference_evidence.reference_link,
+          stage4_oracle_decision: data.reference_evidence.stage4_oracle_decision,
+          audit: data.reference_evidence.audit,
+          fixture_only_verification: data.reference_evidence.verification,
+          fixture_only_artifact_hashes: data.reference_evidence.evidence?.artifact_hashes,
+        } : null,
+      }, null, 2);
+      renderBoundedCounterexample(data.counterexample);
+      const noAction = data.decision === 'no_action';
+      setBadges([
+        { text: state.replaceAll('_', ' '), kind: state === UI_STATES.CHECKS_PASSED || state === UI_STATES.BOUNDED_APPROVAL_REQUIRED ? 'ok' : (state === UI_STATES.VIOLATION_FOUND ? 'bad' : 'warn') },
+        { text: data.fsir?.canonical ? 'Canonical FSIR' : 'Projection only', kind: data.fsir?.canonical ? 'ok' : 'warn' },
+        { text: noAction ? 'No evidence needed' : (data.evidence?.trusted ? 'Evidence current' : 'No applicable evidence'), kind: noAction ? 'neutral' : (data.evidence?.trusted ? 'ok' : 'warn') },
+      ]);
+      setAgentState(state, boundedStateMessage(data), currentControls);
+      setStages(state === UI_STATES.CLARIFICATION_REQUIRED ? 'review' : (state === UI_STATES.VERIFICATION_RUNNING ? 'running' : 'evidence'));
+      addActivity('agent', `${data.case_id || 'Canonical FSIR'} returned state ${state}.`);
+      if (data.hero) addActivity('system', `Loaded intended hero stage ${data.hero.stage}/8: ${data.hero.label}.`);
+    }
+
+    function renderBoundedFsirReview(data) {
+      const fsir = data.fsir || {};
+      const nodes = fsir.nodes || [];
+      const target = document.getElementById('fsirList');
+      const questions = document.getElementById('blockingQuestions');
+      reviewStates = new Map(nodes.map((node) => [node.id, node.review_status === 'reviewed' ? 'approve' : 'pending']));
+      document.getElementById('fsirMeta').innerHTML = [
+        `FSIR: ${escapeHtml(fsir.document_id || fsir.version || 'unavailable')}`,
+        `Contract: ${fsir.canonical ? 'canonical FSIR v0.1' : 'projection only'}`,
+        `Intent: ${escapeHtml(fsir.intent || 'unknown')}`,
+        `Source links: ${fsir.canonical ? 'canonical span IDs' : 'corpus projection spans'}`,
+        `Evidence: ${escapeHtml(data.evidence?.status || 'none')}`,
+      ].map((item) => `<span class="badge">${item}</span>`).join('');
+
+      const unresolved = (fsir.unresolved || []).filter((item) => item.blocking !== false);
+      if (unresolved.length) {
+        questions.className = 'question-list visible';
+        questions.innerHTML = `<strong>${unresolved.length} blocking question${unresolved.length === 1 ? '' : 's'}</strong><ol>${unresolved.map((item) => `<li><code>${escapeHtml(item.id)}</code> · ${escapeHtml(item.question || item.prompt || '')}</li>`).join('')}</ol>`;
+      } else {
+        questions.className = 'question-list';
+        questions.innerHTML = '';
+      }
+
+      if (!nodes.length) {
+        const noAction = fsir.intent === 'no_action' && data.decision === 'no_action';
+        target.innerHTML = `<div class="empty">${noAction
+          ? 'Intentional zero-action FSIR: no financial action node exists, and no execution approval is offered.'
+          : 'No canonical action nodes are available. Verification and approval remain blocked.'}</div>`;
+        document.getElementById('fsirStatus').textContent = noAction ? 'Verified no-action intent' : 'No canonical draft';
+        document.getElementById('fsirStatus').className = `badge ${noAction ? 'ok' : 'warn'}`;
+        updateApprovalState();
+        return;
+      }
+
+      target.replaceChildren();
+      const reviewAllowed = fsir.canonical && ![
+        UI_STATES.VERIFICATION_RUNNING,
+        UI_STATES.VIOLATION_FOUND,
+        UI_STATES.VERIFICATION_UNAVAILABLE,
+        UI_STATES.STOPPED,
+      ].includes(data.agent.state);
+      nodes.forEach((node, index) => {
+        const item = document.createElement('div');
+        item.className = 'fsir-node';
+        item.dataset.nodeIndex = String(index);
+        item.dataset.nodeId = node.id;
+        const number = document.createElement('span');
+        number.className = 'fsir-index';
+        number.textContent = String(index + 1);
+        const content = document.createElement('div');
+        const heading = document.createElement('strong');
+        heading.textContent = `${node.label || node.type} · ${node.id}`;
+        const inlineSpans = (node.source_spans || []).filter((span) => span && typeof span === 'object');
+        const spanIds = node.source_span_ids || (node.source_spans || []).filter((span) => typeof span === 'string');
+        const spans = inlineSpans.length
+          ? inlineSpans
+          : (fsir.source_spans || []).filter((span) => spanIds.includes(span.id));
+        const source = document.createElement('div');
+        source.className = 'source';
+        if (spans.length) {
+          source.append(`Source ${spans.map((span) => span.id).join(', ')}: `);
+          const mark = document.createElement('mark');
+          mark.textContent = spans.map((span) => span.text).join(' · ');
+          source.appendChild(mark);
+        } else {
+          source.textContent = `Source IDs: ${spanIds.join(', ') || 'unavailable'}`;
+        }
+        const controls = document.createElement('div');
+        controls.className = 'review-controls';
+        controls.setAttribute('aria-label', `Review FSIR node ${node.id}`);
+        [['approve', 'Approve node'], ['edit', 'Edit source'], ['reject', 'Reject node']].forEach(([value, copy]) => {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.dataset.review = value;
+          button.textContent = copy;
+          button.disabled = !reviewAllowed || (value === 'edit' && !data.agent.controls.edit);
+          if (value === 'reject') button.classList.add('reject');
+          controls.appendChild(button);
+        });
+        content.append(heading, source, controls);
+        const status = document.createElement('span');
+        status.className = 'badge';
+        status.textContent = reviewStates.get(node.id) === 'approve' ? 'Reviewed' : 'Awaiting review';
+        item.append(number, content, status);
+        target.appendChild(item);
+      });
+      document.getElementById('fsirStatus').textContent = fsir.canonical ? 'Canonical · review required' : 'Projection · not canonical';
+      document.getElementById('fsirStatus').className = 'badge warn';
+      updateApprovalState();
+    }
+
+    function renderBoundedWorkbenchVerdict(data) {
+      const hero = document.getElementById('verdictHero');
+      const state = data.agent.state;
+      const label = document.getElementById('verdictLabel');
+      const title = document.getElementById('verdictTitle');
+      const text = document.getElementById('verdictText');
+      const notice = document.getElementById('contractNotice');
+      hero.className = 'verdict-hero visible';
+      notice.className = 'contract-notice';
+      notice.textContent = '';
+
+      if (data.integration_compatibility?.contract_match === false) {
+        hero.classList.add('unavailable');
+        label.textContent = 'Reference evidence only';
+        title.textContent = 'The lifecycle fixture does not verify this hero contract.';
+        text.textContent = 'Source document and spans, FSIR ID, action granularity, property contract, and bounds are not joined by an approved refinement mapping.';
+        notice.className = 'contract-notice visible';
+        notice.textContent = `Fail-closed contract block: ${data.integration_compatibility.mismatches.map((item) => `${item.code}: ${item.message}`).join('; ')}. Fixture classifications, events, and hashes are fixture-only; core.30 verification and approval remain unavailable.`;
+      } else if (data.decision === 'no_action') {
+        hero.classList.add('passed');
+        label.textContent = 'Intentional no-action result';
+        title.textContent = 'No financial action was requested or emitted.';
+        text.textContent = 'This is a valid zero-action outcome. It is not an extraction failure and offers no execution approval.';
+      } else if (state === UI_STATES.VIOLATION_FOUND) {
+        hero.classList.add('blocked');
+        label.textContent = 'Plan blocked';
+        title.textContent = data.counterexample?.summary || 'A configured property was violated.';
+        text.textContent = 'The finding is bound to the exact canonical FSIR, source map, property ID, trace, and displayed hashes.';
+      } else if (state === UI_STATES.CHECKS_PASSED || state === UI_STATES.BOUNDED_APPROVAL_REQUIRED) {
+        hero.classList.add('passed');
+        label.textContent = 'No configured guardrail was violated';
+        title.textContent = state === UI_STATES.BOUNDED_APPROVAL_REQUIRED ? 'Ready for bounded human approval.' : 'The bounded canonical checks completed.';
+        text.textContent = 'This is not a general claim of financial safety. It applies only to the named FSIR, properties, assumptions, bounds, and evidence hashes.';
+      } else if (state === UI_STATES.CLARIFICATION_REQUIRED) {
+        hero.classList.add('clarify');
+        label.textContent = 'Needs clarification';
+        title.textContent = 'A blocking semantic question must be answered.';
+        text.textContent = 'No lowering artifact or approval is available before the unresolved meaning is closed.';
+      } else {
+        hero.classList.add('unavailable');
+        label.textContent = 'Verification unavailable';
+        title.textContent = 'No applicable bounded verdict is available.';
+        text.textContent = data.verification?.message || data.evidence?.reason || 'The integration failed closed.';
+      }
+      document.getElementById('verdictMeta').innerHTML = [
+        `property: ${(data.verification?.violated_property_ids || []).join(', ') || 'none violated / not individually asserted'}`,
+        `backend: ${escapeHtml(data.verification?.backend || 'not run')} · ${escapeHtml(data.verification?.classification || 'not applicable')}`,
+        `bounds: ${escapeHtml(JSON.stringify(data.fsir?.bounds || {}))}`,
+        `FSIR hash: ${escapeHtml(data.verification?.fsir_hash || 'not derived')}`,
+        `model: ${escapeHtml(data.verification?.model_hash || 'not derived')}`,
+      ].map((item) => `<span>${item}</span>`).join('');
+    }
+
+    function renderBoundedCounterexample(counterexample) {
+      const path = counterexample?.path || [];
+      if (!path.length) {
+        document.getElementById('visualSummary').textContent = counterexample?.summary || 'No counterexample is asserted.';
+        document.getElementById('journeyPanel').style.display = 'none';
+        document.getElementById('visualizationBadge').textContent = 'No counterexample';
+        document.getElementById('visualizationBadge').className = 'badge ok';
+        hideViolationJourney();
+        renderTlcGraph({ status: 'unavailable', message: 'No counterexample graph exists for this response.' }, []);
+        return;
+      }
+      const nodes = path.map((item, index) => ({
+        state_number: index,
+        action_index: index,
+        kind: index === 0 ? 'initial' : 'action',
+        action: item.event_id ? { action: item.event_id, operator_id: item.operator_id } : null,
+        balances: Object.fromEntries(Object.entries(item.after || {}).filter(([key]) => key.startsWith('state.cash.'))),
+        violations: (item.violations || []).map((id) => ({ code: id, message: `${id} is violated here.` })),
+      }));
+      renderViolationVisualization({
+        journey: {
+          first_violating_state: nodes.length - 1,
+          counterexample_path: nodes.map((_, index) => index),
+          nodes,
+        },
+        choices: [],
+        tlc_graph: { status: 'unavailable', message: 'The API exposes the strict normalized counterexample, not a raw TLC graph.' },
+      });
+    }
+
+    function boundedStateMessage(data) {
+      if (data.integration_compatibility?.contract_match === false) return 'Reference evidence is visible for comparison only. Verification and approval are disabled for this contract.';
+      if (data.decision === 'no_action') return 'Intent validated as no action; no verification evidence or execution approval is needed.';
+      const messages = {
+        clarification_required: 'Answer the blocking question before verification.',
+        ready_for_review: 'Review the canonical FSIR and exact source links before verification.',
+        verification_running: 'Verification is running. Only Stop is available.',
+        violation_found: 'A source-linked counterexample blocks bounded approval.',
+        verification_unavailable: 'Verification is unavailable; no bounded conclusion was made.',
+        revision_proposed: 'A revision is proposed; prior evidence cannot authorize it.',
+        reverification_required: 'The edited FSIR requires fresh verification.',
+        checks_passed: 'Bounded checks passed; review remains scoped to this exact evidence.',
+        bounded_approval_required: 'Exact FSIR, bounds, and evidence are ready for bounded approval.',
+        stopped: 'Agent stopped. Only Resume or New goal is available.',
+      };
+      return messages[data.agent.state] || `Agent state: ${data.agent.state}`;
+    }
+
+    function advanceHeroStage(stage) {
+      const example = examples[Number(document.getElementById('exampleSelect').value || 0)];
+      if (example.bounded_case_id !== 'core.30') return;
+      document.getElementById('heroStageSelect').value = String(stage);
+      runSemanticCheck();
     }
 
     function renderResult(data) {
@@ -959,6 +1390,16 @@ The workbench shall evaluate both choices before approving either one.`,
         'Approval: required',
       ].map((item) => `<span class="badge">${item}</span>`).join('');
       if (!actions.length) {
+        const intentionalNoAction = data.decision !== 'extraction_failed' && data.safe_to_execute;
+        if (intentionalNoAction) {
+          questions.className = 'question-list';
+          questions.innerHTML = '';
+          target.innerHTML = '<div class="empty">Intentional zero-action result: no financial action was requested or emitted. This is not an extraction failure, and no execution approval is offered.</div>';
+          document.getElementById('fsirStatus').textContent = 'Verified no-action intent';
+          document.getElementById('fsirStatus').className = 'badge ok';
+          updateApprovalState();
+          return;
+        }
         const unresolved = deriveBlockingQuestions(data);
         questions.className = 'question-list visible';
         questions.innerHTML = `<strong>${unresolved.length} blocking question${unresolved.length === 1 ? '' : 's'}</strong><ol>${unresolved.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ol>`;
@@ -1039,18 +1480,19 @@ The workbench shall evaluate both choices before approving either one.`,
 
     function handleReviewControl(event) {
       const button = event.target.closest('[data-review]');
-      if (!button) return;
+      if (!button || button.disabled) return;
       const node = button.closest('.fsir-node');
       const index = Number(node.dataset.nodeIndex);
+      const reviewKey = node.dataset.nodeId || index;
       const decision = button.dataset.review;
       node.querySelectorAll('[data-review]').forEach((item) => item.classList.remove('selected'));
       button.classList.add('selected');
       if (decision === 'edit') {
-        reviewStates.set(index, 'edit');
+        reviewStates.set(reviewKey, 'edit');
         document.getElementById('financeAdvice').focus();
         invalidateEvidence(`Editing action ${index + 1} invalidates the current evidence.`);
       } else {
-        reviewStates.set(index, decision);
+        reviewStates.set(reviewKey, decision);
         addActivity('user', `${decision === 'approve' ? 'Approved' : 'Rejected'} FSIR action ${index + 1}.`);
       }
       const status = node.lastElementChild;
@@ -1063,30 +1505,73 @@ The workbench shall evaluate both choices before approving either one.`,
       const total = reviewStates.size;
       const approved = [...reviewStates.values()].filter((value) => value === 'approve').length;
       const rejected = [...reviewStates.values()].filter((value) => value === 'reject').length;
-      const formalComplete = currentResult && currentResult.safe_to_execute && currentResult.tlc?.status === 'passed';
+      const formalComplete = currentResult?.schema_version === 'bounded-workbench-0.1'
+        ? Boolean(
+          currentResult.fsir?.canonical
+          && currentResult.evidence?.trusted
+          && currentResult.verification?.classification === 'passed'
+          && currentResult.integration_compatibility?.contract_match !== false
+        )
+        : Boolean(currentResult && currentResult.safe_to_execute && currentResult.tlc?.status === 'passed');
       const ready = total > 0 && approved === total && !rejected && formalComplete;
       const button = document.getElementById('boundedApprovalBtn');
-      button.disabled = !ready;
+      if (ready && document.getElementById('agentStatus').dataset.state === UI_STATES.CHECKS_PASSED) {
+        setAgentState(UI_STATES.BOUNDED_APPROVAL_REQUIRED, 'All canonical nodes are reviewed and the evidence is current. Awaiting bounded approval.');
+      }
+      button.disabled = !(ready && currentControls.approve);
       document.getElementById('approvalCopy').innerHTML = ready
         ? `<strong>Ready for bounded approval.</strong> ${approved}/${total} nodes approved; no execution occurs in this sandbox.`
         : `<strong>Approval blocked.</strong> ${approved}/${total} nodes approved${rejected ? `; ${rejected} rejected` : ''}.`;
-      if (ready) {
+      if (ready && currentControls.approve) {
         document.getElementById('fsirStatus').textContent = 'Reviewed';
         document.getElementById('fsirStatus').className = 'badge ok';
-        setAgentState(UI_STATES.BOUNDED_APPROVAL_REQUIRED, 'All nodes are reviewed and evidence is current. Awaiting bounded human approval.');
       }
     }
 
     function approveBoundedScope() {
       if (document.getElementById('boundedApprovalBtn').disabled) return;
+      const expiry = document.getElementById('approvalExpiry').value;
+      if (!expiry || Number.isNaN(Date.parse(expiry)) || Date.parse(expiry) <= Date.now()) {
+        setError('Choose a future approval expiry before recording bounded approval.');
+        document.getElementById('approvalExpiry').focus();
+        return;
+      }
+      if (currentResult?.schema_version === 'bounded-workbench-0.1' && !(
+        currentResult.fsir?.canonical
+        && currentResult.evidence?.trusted
+        && currentResult.verification?.classification === 'passed'
+        && currentResult.integration_compatibility?.contract_match !== false
+      )) {
+        setError('Bounded approval requires current canonical evidence for this exact contract.');
+        return;
+      }
+      clearError();
       document.getElementById('boundedApprovalBtn').disabled = true;
       document.getElementById('boundedApprovalBtn').textContent = 'Bounded scope approved';
-      document.getElementById('approvalCopy').innerHTML = '<strong>Approval recorded.</strong> Scope is limited to the displayed FSIR version and configured bounds; this sandbox still performs no execution.';
-      addActivity('user', `Approved bounded scope for ui-fsir/${currentRunId}; execution authority remains disabled.`);
+      const actionIds = currentResult?.fsir?.approval_scope?.action_ids || [...reviewStates.keys()];
+      document.getElementById('approvalCopy').innerHTML = `<strong>Approval recorded until ${escapeHtml(expiry)}.</strong> Scope is limited to ${actionIds.length} displayed action IDs and the exact FSIR/model hashes; this sandbox still performs no execution.`;
+      addActivity('user', `Approved bounded scope for ${currentResult?.verification?.fsir_hash || `ui-fsir/${currentRunId}`} through ${expiry}; execution authority remains disabled.`);
       document.getElementById('agentStatus').textContent = 'Bounded approval recorded. No trade or transfer was executed.';
     }
 
     function proposeSaferRevision() {
+      if (currentResult?.schema_version === 'bounded-workbench-0.1') {
+        const revision = currentResult.projection?.revision;
+        currentResult.evidence = {
+          status: 'stale',
+          trusted: false,
+          artifact_hashes: {},
+          reason: 'The proposed semantic change is not covered by the prior model hash.',
+        };
+        document.getElementById('contractNotice').className = 'contract-notice visible';
+        document.getElementById('contractNotice').textContent = `${revision?.rationale || 'A safer revision is proposed.'} This proposal has no current canonical evidence; a newly validated FSIR must be verified before approval.`;
+        document.getElementById('boundedApprovalBtn').disabled = true;
+        document.getElementById('fsirStatus').textContent = 'Revision proposed · evidence stale';
+        document.getElementById('fsirStatus').className = 'badge warn';
+        setAgentState(UI_STATES.REVISION_PROPOSED, 'A source-linked revision is proposed, but prior evidence is stale and cannot authorize it.');
+        addActivity('agent', `Proposed bounded revision: ${(revision?.diff || []).join('; ') || 'change unsafe plan semantics without weakening the contract'}.`);
+        return;
+      }
       const advice = document.getElementById('financeAdvice');
       advice.value = 'First transfer 300 from checking into brokerage. Then buy 300 of VTI using the funded brokerage account.';
       document.getElementById('revisionBtn').style.display = 'none';
@@ -1116,8 +1601,11 @@ The workbench shall evaluate both choices before approving either one.`,
       document.getElementById('verdictHero').className = 'verdict-hero';
       document.getElementById('boundedApprovalBtn').disabled = true;
       document.getElementById('boundedApprovalBtn').textContent = 'Approve verified scope';
+      document.getElementById('approvalExpiry').value = '';
       document.getElementById('approvalCopy').innerHTML = '<strong>Approval blocked.</strong> Review every required node first.';
       document.getElementById('revisionBtn').style.display = 'none';
+      document.getElementById('contractNotice').className = 'contract-notice';
+      document.getElementById('contractNotice').textContent = '';
       setStages('define');
     }
 
@@ -1179,9 +1667,73 @@ The workbench shall evaluate both choices before approving either one.`,
       if (record) addActivity('system', `Evidence invalidated: ${reason}`);
     }
 
-    function setAgentState(state, message) {
+    function closedControls(state) {
+      const enabled = CONTROL_MATRIX[state] || {};
+      return Object.fromEntries(CONTROL_KEYS.map((key) => [key, Boolean(enabled[key])]));
+    }
+
+    function validateControlEnvelope(state, controls) {
+      const expected = closedControls(state);
+      if (!controls || Object.keys(controls).sort().join('|') !== [...CONTROL_KEYS].sort().join('|')) {
+        throw new Error(`Control envelope for ${state} is not closed.`);
+      }
+      for (const key of CONTROL_KEYS) {
+        if (Boolean(controls[key]) !== expected[key]) throw new Error(`Control ${key} is invalid for state ${state}.`);
+      }
+      return { ...controls };
+    }
+
+    function applyControlEnvelope(controls) {
+      currentControls = { ...controls };
+      const runBtn = document.getElementById('runBtn');
+      const canRun = controls.verify || controls.rerun;
+      runBtn.hidden = !canRun;
+      runBtn.disabled = !canRun;
+      runBtn.textContent = controls.rerun
+        ? (currentResult?.integration_compatibility?.contract_match === false ? 'Reload reference-only stage' : 'Rerun verification')
+        : 'Verify exact scope';
+
+      const visibility = {
+        editGoalBtn: controls.edit,
+        stopAgentBtn: controls.stop,
+        revisionBtn: controls.revise,
+        clarifyBtn: controls.clarify,
+        inspectEvidenceBtn: controls.inspect_evidence,
+        resumeAgentBtn: controls.resume,
+        newGoalBtn: controls.new_goal,
+      };
+      Object.entries(visibility).forEach(([id, visible]) => {
+        const element = document.getElementById(id);
+        element.hidden = !visible;
+        if (id === 'revisionBtn') element.style.display = visible ? '' : 'none';
+        element.disabled = !visible;
+      });
+      document.getElementById('boundedApprovalBtn').disabled = !controls.approve;
+
+      const state = document.getElementById('agentStatus').dataset.state;
+      const boundedScenario = Boolean(examples[Number(document.getElementById('exampleSelect').value || 0)]?.bounded_case_id);
+      const editable = controls.edit && !boundedScenario;
+      ['userMessage', 'financeAdvice'].forEach((id) => { document.getElementById(id).disabled = !editable; });
+      ['policyBudget', 'policyMaxAction', 'policyBalances', 'policyDestinations', 'policyActionTypes', 'runTlc', 'fixtureReplay']
+        .forEach((id) => { document.getElementById(id).disabled = !editable || boundedScenario; });
+      document.getElementById('exampleSelect').disabled = state === UI_STATES.VERIFICATION_RUNNING;
+      document.querySelectorAll('#fsirList [data-review]').forEach((button) => {
+        const decision = button.dataset.review;
+        const reviewState = [
+          UI_STATES.READY_FOR_REVIEW,
+          UI_STATES.REVISION_PROPOSED,
+          UI_STATES.REVERIFICATION_REQUIRED,
+          UI_STATES.CHECKS_PASSED,
+          UI_STATES.BOUNDED_APPROVAL_REQUIRED,
+        ].includes(state);
+        button.disabled = !reviewState || (decision === 'edit' && (!controls.edit || boundedScenario));
+      });
+    }
+
+    function setAgentState(state, message, controls = null) {
       document.getElementById('agentStatus').textContent = message;
       document.getElementById('agentStatus').dataset.state = state;
+      applyControlEnvelope(controls ? validateControlEnvelope(state, controls) : closedControls(state));
     }
 
     function setStages(active) {
@@ -1260,8 +1812,19 @@ The workbench shall evaluate both choices before approving either one.`,
         button.className = `state-node ${node.violations.length ? 'failure' : ''}`;
         const title = document.createElement('span'); title.className = 'node-title'; title.textContent = node.kind === 'initial' ? 'Start state' : `State ${node.state_number} · action ${node.action_index}`;
         const meta = document.createElement('span'); meta.className = 'node-meta';
-        meta.textContent = node.action ? `${node.action.action} ${node.action.amount}: ${node.action.from} → ${node.action.to}` : `Budget ${node.budget}`;
-        const outflow = document.createElement('span'); outflow.className = 'node-meta'; outflow.textContent = `Outflow ${node.total_outflow} / ${node.budget}`;
+        if (node.action) {
+          const parts = [node.action.action];
+          if (node.action.amount != null) parts.push(`$${node.action.amount}`);
+          if (node.action.from || node.action.to) parts.push(`${node.action.from || '?'} → ${node.action.to || '?'}`);
+          meta.textContent = parts.join(' · ');
+        } else {
+          meta.textContent = 'Observable initial state';
+        }
+        const outflow = document.createElement('span');
+        outflow.className = 'node-meta';
+        outflow.textContent = node.total_outflow != null && node.budget != null
+          ? `Outflow ${node.total_outflow} / ${node.budget}`
+          : `Cash: ${Object.entries(node.balances || {}).map(([key, value]) => `${key.replace('state.cash.', '')} ${value}`).join(' · ') || 'not exposed'}`;
         button.append(title, meta, outflow);
         if (node.violations.length) { const violation = document.createElement('span'); violation.className = 'node-meta'; violation.textContent = node.violations.map((item) => item.code).join(', '); button.appendChild(violation); }
         button.addEventListener('click', () => { target.querySelectorAll('.selected').forEach((item) => item.classList.remove('selected')); button.classList.add('selected'); document.getElementById('stateDetail').textContent = JSON.stringify(node, null, 2); });

@@ -1,0 +1,57 @@
+TLC2 Version 2.19 of 08 August 2024 (rev: 5a47802)
+Warning: Please run the Java VM which executes TLC with a throughput optimized garbage collector by passing the "-XX:+UseParallelGC" property.
+(Use the -nowarning option to disable this warning.)
+Running breadth-first search Model-Checking with fp 12 and seed -3163297735448528927 with 1 worker on 12 cores with 1892MB heap and 64MB offheap memory [pid: 1358611] (Linux 6.8.0-47-generic amd64, Ubuntu 21.0.11 x86_64, MSBDiskFPSet, DiskStateQueue).
+Parsing file /tmp/tla-finance-d45efd0.VtDgxr/evidence-pinned/concurrent/FsirLifecycleConcurrent.tla
+Parsing file /tmp/Integers.tla
+Parsing file /tmp/FiniteSets.tla
+Parsing file /tmp/Sequences.tla
+Parsing file /tmp/Naturals.tla
+Semantic processing of module Naturals
+Semantic processing of module Integers
+Semantic processing of module Sequences
+Semantic processing of module FiniteSets
+Semantic processing of module FsirLifecycleConcurrent
+Starting... (2026-07-29 14:07:28)
+Implied-temporal checking--satisfiability problem has 2 branches.
+Computing initial states...
+Finished computing initial states: 1 distinct state generated at 2026-07-29 14:07:28.
+Error: Invariant Prop_property_safe_transfer_then_buy_order_sensitive_no_negative_cash_3fdd966b is violated.
+Error: The behavior up to this point is:
+State 1: <Initial predicate>
+/\ lastEvent = "init"
+/\ State_state_cash_savings_548e3bb7 = 100
+/\ done = {}
+/\ State_state_position_brokerage_vti_f0670753 = 0
+/\ selectedBranch = "fixed"
+/\ State_state_cash_checking_1c212abd = 600
+/\ State_state_buy_status_a9cb3a91 = "not_submitted"
+/\ State_state_transfer_status_5ad17816 = "not_submitted"
+/\ State_state_cash_brokerage_d2161d34 = 0
+
+State 2: <Act_event_buy_submit_762f7978 line 56, col 3 to line 62, col 29 of module FsirLifecycleConcurrent>
+/\ lastEvent = "event.buy.submit"
+/\ State_state_cash_savings_548e3bb7 = 100
+/\ done = {"event.buy.submit"}
+/\ State_state_position_brokerage_vti_f0670753 = 0
+/\ selectedBranch = "fixed"
+/\ State_state_cash_checking_1c212abd = 600
+/\ State_state_buy_status_a9cb3a91 = "submitted"
+/\ State_state_transfer_status_5ad17816 = "not_submitted"
+/\ State_state_cash_brokerage_d2161d34 = 0
+
+State 3: <Act_event_buy_execute_4deb6ea8 line 66, col 3 to line 74, col 29 of module FsirLifecycleConcurrent>
+/\ lastEvent = "event.buy.execute"
+/\ State_state_cash_savings_548e3bb7 = 100
+/\ done = {"event.buy.submit", "event.buy.execute"}
+/\ State_state_position_brokerage_vti_f0670753 = 300
+/\ selectedBranch = "fixed"
+/\ State_state_cash_checking_1c212abd = 600
+/\ State_state_buy_status_a9cb3a91 = "submitted"
+/\ State_state_transfer_status_5ad17816 = "not_submitted"
+/\ State_state_cash_brokerage_d2161d34 = -300
+
+7 states generated, 7 distinct states found, 3 states left on queue.
+The depth of the complete state graph search is 3.
+The average outdegree of the complete state graph is 2 (minimum is 2, the maximum 2 and the 95th percentile is 2).
+Finished in 00s at (2026-07-29 14:07:28)
