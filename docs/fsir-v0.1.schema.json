@@ -1,0 +1,1386 @@
+{
+  "$defs": {
+    "AccountSymbol": {
+      "additionalProperties": false,
+      "properties": {
+        "currency": {
+          "const": "USD",
+          "title": "Currency",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "const": "cash_account",
+          "default": "cash_account",
+          "title": "Kind",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "source_span_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Span Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "currency"
+      ],
+      "title": "AccountSymbol",
+      "type": "object"
+    },
+    "ActionOutcome": {
+      "additionalProperties": false,
+      "properties": {
+        "guard": {
+          "$ref": "#/$defs/Expression"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "source_span_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Span Ids",
+          "type": "array"
+        },
+        "updates": {
+          "items": {
+            "$ref": "#/$defs/StateUpdate"
+          },
+          "title": "Updates",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "guard",
+        "updates"
+      ],
+      "title": "ActionOutcome",
+      "type": "object"
+    },
+    "ActionParameter": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "const": "USD",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unit"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Value"
+        },
+        "value_type": {
+          "enum": [
+            "money",
+            "account_id",
+            "instrument_id",
+            "string"
+          ],
+          "title": "Value Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "value",
+        "value_type"
+      ],
+      "title": "ActionParameter",
+      "type": "object"
+    },
+    "ActorSymbol": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "role": {
+          "enum": [
+            "user",
+            "agent",
+            "external_service"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "source_span_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Span Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "role",
+        "label"
+      ],
+      "title": "ActorSymbol",
+      "type": "object"
+    },
+    "AssetPositionSymbol": {
+      "additionalProperties": false,
+      "properties": {
+        "account_id": {
+          "title": "Account Id",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "instrument_id": {
+          "title": "Instrument Id",
+          "type": "string"
+        },
+        "kind": {
+          "const": "asset_position",
+          "default": "asset_position",
+          "title": "Kind",
+          "type": "string"
+        },
+        "source_span_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Span Ids",
+          "type": "array"
+        },
+        "unit": {
+          "const": "USD_notional",
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "account_id",
+        "instrument_id",
+        "unit"
+      ],
+      "title": "AssetPositionSymbol",
+      "type": "object"
+    },
+    "Assumption": {
+      "additionalProperties": false,
+      "properties": {
+        "action_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Action Ids",
+          "type": "array"
+        },
+        "formula": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expression"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "environment",
+            "weak_fairness",
+            "strong_fairness",
+            "timing",
+            "trusted_fact"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "source_span_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Span Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "kind"
+      ],
+      "title": "Assumption",
+      "type": "object"
+    },
+    "Bounds": {
+      "additionalProperties": false,
+      "properties": {
+        "domains": {
+          "items": {
+            "$ref": "#/$defs/DomainBound"
+          },
+          "title": "Domains",
+          "type": "array"
+        },
+        "max_actions": {
+          "title": "Max Actions",
+          "type": "integer"
+        },
+        "max_retries": {
+          "title": "Max Retries",
+          "type": "integer"
+        },
+        "max_steps": {
+          "title": "Max Steps",
+          "type": "integer"
+        },
+        "time_horizon": {
+          "title": "Time Horizon",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "max_actions",
+        "max_steps",
+        "max_retries",
+        "time_horizon"
+      ],
+      "title": "Bounds",
+      "type": "object"
+    },
+    "Control": {
+      "additionalProperties": false,
+      "properties": {
+        "branches": {
+          "items": {
+            "$ref": "#/$defs/ControlBranch"
+          },
+          "title": "Branches",
+          "type": "array"
+        },
+        "edges": {
+          "items": {
+            "$ref": "#/$defs/ControlEdge"
+          },
+          "title": "Edges",
+          "type": "array"
+        },
+        "kind": {
+          "enum": [
+            "none",
+            "sequence",
+            "choice",
+            "parallel",
+            "partial_order",
+            "ambiguous"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "nodes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Nodes",
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "Control",
+      "type": "object"
+    },
+    "ControlBranch": {
+      "additionalProperties": false,
+      "properties": {
+        "action_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Action Ids",
+          "type": "array"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "action_ids"
+      ],
+      "title": "ControlBranch",
+      "type": "object"
+    },
+    "ControlEdge": {
+      "additionalProperties": false,
+      "properties": {
+        "after": {
+          "title": "After",
+          "type": "string"
+        },
+        "before": {
+          "title": "Before",
+          "type": "string"
+        }
+      },
+      "required": [
+        "before",
+        "after"
+      ],
+      "title": "ControlEdge",
+      "type": "object"
+    },
+    "Derivation": {
+      "additionalProperties": false,
+      "properties": {
+        "method": {
+          "enum": [
+            "stated",
+            "deterministic_adapter",
+            "human_reviewed_seed",
+            "human_selected",
+            "model_proposed"
+          ],
+          "title": "Method",
+          "type": "string"
+        },
+        "node_id": {
+          "title": "Node Id",
+          "type": "string"
+        },
+        "source_span_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Span Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "node_id",
+        "method"
+      ],
+      "title": "Derivation",
+      "type": "object"
+    },
+    "DomainBound": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "integer_set",
+            "enum_set"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "values": {
+          "items": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "title": "Values",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "values"
+      ],
+      "title": "DomainBound",
+      "type": "object"
+    },
+    "Expression": {
+      "additionalProperties": false,
+      "description": "Closed recursive expression AST.",
+      "properties": {
+        "args": {
+          "items": {
+            "$ref": "#/$defs/Expression"
+          },
+          "title": "Args",
+          "type": "array"
+        },
+        "event_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Event Ids",
+          "type": "array"
+        },
+        "left": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expression"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "op": {
+          "enum": [
+            "literal",
+            "set_literal",
+            "state_ref",
+            "not",
+            "and",
+            "or",
+            "eq",
+            "neq",
+            "gte",
+            "gt",
+            "lte",
+            "lt",
+            "add",
+            "sub",
+            "in",
+            "always",
+            "eventually",
+            "precedence",
+            "well_typed_state"
+          ],
+          "title": "Op",
+          "type": "string"
+        },
+        "right": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expression"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "state_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "State Id"
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "enum": [
+                "USD",
+                "USD_notional"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unit"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        },
+        "value_type": {
+          "anyOf": [
+            {
+              "enum": [
+                "money",
+                "integer",
+                "enum",
+                "boolean",
+                "string"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value Type"
+        },
+        "values": {
+          "items": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "title": "Values",
+          "type": "array"
+        }
+      },
+      "required": [
+        "op"
+      ],
+      "title": "Expression",
+      "type": "object"
+    },
+    "FsirAction": {
+      "additionalProperties": false,
+      "properties": {
+        "actor_id": {
+          "title": "Actor Id",
+          "type": "string"
+        },
+        "atomicity_group": {
+          "title": "Atomicity Group",
+          "type": "string"
+        },
+        "guard": {
+          "$ref": "#/$defs/Expression"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "intent_id": {
+          "title": "Intent Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "legacy_atomic",
+            "submit",
+            "environment_outcome",
+            "conditional_outcome"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "outcomes": {
+          "items": {
+            "$ref": "#/$defs/ActionOutcome"
+          },
+          "title": "Outcomes",
+          "type": "array"
+        },
+        "parameters": {
+          "items": {
+            "$ref": "#/$defs/ActionParameter"
+          },
+          "title": "Parameters",
+          "type": "array"
+        },
+        "reads": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Reads",
+          "type": "array"
+        },
+        "source_span_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Span Ids",
+          "type": "array"
+        },
+        "updates": {
+          "items": {
+            "$ref": "#/$defs/StateUpdate"
+          },
+          "title": "Updates",
+          "type": "array"
+        },
+        "writes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Writes",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "intent_id",
+        "kind",
+        "actor_id",
+        "guard",
+        "atomicity_group"
+      ],
+      "title": "FsirAction",
+      "type": "object"
+    },
+    "FsirMeta": {
+      "additionalProperties": false,
+      "properties": {
+        "budget_semantics": {
+          "enum": [
+            "gross_debit",
+            "external_outflow",
+            "net_spend",
+            "not_applicable",
+            "unresolved"
+          ],
+          "title": "Budget Semantics",
+          "type": "string"
+        },
+        "created_by": {
+          "$ref": "#/$defs/ToolIdentity"
+        },
+        "currency": {
+          "const": "USD",
+          "title": "Currency",
+          "type": "string"
+        },
+        "domain_profile": {
+          "title": "Domain Profile",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "intent": {
+          "enum": [
+            "action_plan",
+            "no_action",
+            "underspecified_action"
+          ],
+          "title": "Intent",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "fsir-0.1",
+          "default": "fsir-0.1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_document_sha256": {
+          "title": "Source Document Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "source_document_sha256",
+        "domain_profile",
+        "intent",
+        "currency",
+        "budget_semantics",
+        "created_by"
+      ],
+      "title": "FsirMeta",
+      "type": "object"
+    },
+    "InstrumentSymbol": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "const": "instrument",
+          "default": "instrument",
+          "title": "Kind",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "source_span_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Span Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "label"
+      ],
+      "title": "InstrumentSymbol",
+      "type": "object"
+    },
+    "LegacyAction": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "title": "Action",
+          "type": "string"
+        },
+        "amount": {
+          "title": "Amount",
+          "type": "integer"
+        },
+        "choice": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Choice"
+        },
+        "from": {
+          "title": "From",
+          "type": "string"
+        },
+        "to": {
+          "title": "To",
+          "type": "string"
+        }
+      },
+      "required": [
+        "action",
+        "amount",
+        "from",
+        "to"
+      ],
+      "title": "LegacyAction",
+      "type": "object"
+    },
+    "LegacyChoice": {
+      "additionalProperties": false,
+      "properties": {
+        "actions": {
+          "items": {
+            "$ref": "#/$defs/LegacyAction"
+          },
+          "title": "Actions",
+          "type": "array"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "actions"
+      ],
+      "title": "LegacyChoice",
+      "type": "object"
+    },
+    "LegacyCompatibility": {
+      "additionalProperties": false,
+      "properties": {
+        "format": {
+          "const": "finance-actions-v1",
+          "default": "finance-actions-v1",
+          "title": "Format",
+          "type": "string"
+        },
+        "id_map": {
+          "items": {
+            "$ref": "#/$defs/LegacyIdMap"
+          },
+          "title": "Id Map",
+          "type": "array"
+        },
+        "plan": {
+          "$ref": "#/$defs/LegacyPlan"
+        }
+      },
+      "required": [
+        "plan"
+      ],
+      "title": "LegacyCompatibility",
+      "type": "object"
+    },
+    "LegacyIdMap": {
+      "additionalProperties": false,
+      "properties": {
+        "fsir_action_id": {
+          "title": "Fsir Action Id",
+          "type": "string"
+        },
+        "legacy_path": {
+          "title": "Legacy Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "legacy_path",
+        "fsir_action_id"
+      ],
+      "title": "LegacyIdMap",
+      "type": "object"
+    },
+    "LegacyPlan": {
+      "additionalProperties": false,
+      "properties": {
+        "actions": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/LegacyAction"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Actions"
+        },
+        "choices": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/LegacyChoice"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Choices"
+        }
+      },
+      "title": "LegacyPlan",
+      "type": "object"
+    },
+    "Property": {
+      "additionalProperties": false,
+      "properties": {
+        "formula": {
+          "$ref": "#/$defs/Expression"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "invariant",
+            "action_constraint",
+            "trace",
+            "liveness"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "severity": {
+          "enum": [
+            "error",
+            "warning"
+          ],
+          "title": "Severity",
+          "type": "string"
+        },
+        "source_span_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Span Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "formula",
+        "severity"
+      ],
+      "title": "Property",
+      "type": "object"
+    },
+    "Provenance": {
+      "additionalProperties": false,
+      "properties": {
+        "derivations": {
+          "items": {
+            "$ref": "#/$defs/Derivation"
+          },
+          "title": "Derivations",
+          "type": "array"
+        },
+        "sources": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Sources",
+          "type": "array"
+        },
+        "spans": {
+          "items": {
+            "$ref": "#/$defs/SourceSpan"
+          },
+          "title": "Spans",
+          "type": "array"
+        }
+      },
+      "title": "Provenance",
+      "type": "object"
+    },
+    "SourceSpan": {
+      "additionalProperties": false,
+      "properties": {
+        "end": {
+          "title": "End",
+          "type": "integer"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "origin": {
+          "enum": [
+            "stated",
+            "derived_deterministically",
+            "selected_by_human",
+            "model_proposed",
+            "model_assumption"
+          ],
+          "title": "Origin",
+          "type": "string"
+        },
+        "source_id": {
+          "title": "Source Id",
+          "type": "string"
+        },
+        "start": {
+          "title": "Start",
+          "type": "integer"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "source_id",
+        "text",
+        "start",
+        "end",
+        "origin"
+      ],
+      "title": "SourceSpan",
+      "type": "object"
+    },
+    "StateType": {
+      "additionalProperties": false,
+      "properties": {
+        "currency": {
+          "anyOf": [
+            {
+              "const": "USD",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Currency"
+        },
+        "instrument_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Instrument Id"
+        },
+        "kind": {
+          "enum": [
+            "money",
+            "asset_notional",
+            "integer",
+            "boolean",
+            "enum"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "values": {
+          "items": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "title": "Values",
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "StateType",
+      "type": "object"
+    },
+    "StateUpdate": {
+      "additionalProperties": false,
+      "properties": {
+        "op": {
+          "enum": [
+            "set",
+            "add",
+            "sub"
+          ],
+          "title": "Op",
+          "type": "string"
+        },
+        "target_state_id": {
+          "title": "Target State Id",
+          "type": "string"
+        },
+        "value": {
+          "$ref": "#/$defs/Expression"
+        }
+      },
+      "required": [
+        "op",
+        "target_state_id",
+        "value"
+      ],
+      "title": "StateUpdate",
+      "type": "object"
+    },
+    "StateVariable": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "initial": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Initial"
+        },
+        "observable": {
+          "default": true,
+          "title": "Observable",
+          "type": "boolean"
+        },
+        "source_span_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Span Ids",
+          "type": "array"
+        },
+        "symbol_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Symbol Id"
+        },
+        "type": {
+          "$ref": "#/$defs/StateType"
+        }
+      },
+      "required": [
+        "id",
+        "type"
+      ],
+      "title": "StateVariable",
+      "type": "object"
+    },
+    "SymbolTable": {
+      "additionalProperties": false,
+      "properties": {
+        "accounts": {
+          "items": {
+            "$ref": "#/$defs/AccountSymbol"
+          },
+          "title": "Accounts",
+          "type": "array"
+        },
+        "actors": {
+          "items": {
+            "$ref": "#/$defs/ActorSymbol"
+          },
+          "title": "Actors",
+          "type": "array"
+        },
+        "asset_positions": {
+          "items": {
+            "$ref": "#/$defs/AssetPositionSymbol"
+          },
+          "title": "Asset Positions",
+          "type": "array"
+        },
+        "instruments": {
+          "items": {
+            "$ref": "#/$defs/InstrumentSymbol"
+          },
+          "title": "Instruments",
+          "type": "array"
+        }
+      },
+      "title": "SymbolTable",
+      "type": "object"
+    },
+    "ToolIdentity": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "version": {
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "version"
+      ],
+      "title": "ToolIdentity",
+      "type": "object"
+    },
+    "UnresolvedItem": {
+      "additionalProperties": false,
+      "properties": {
+        "blocks": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Blocks",
+          "type": "array"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "missing_value",
+            "ambiguous_order",
+            "unknown_identity",
+            "unsupported_construct",
+            "conflict",
+            "missing_semantics"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "question": {
+          "title": "Question",
+          "type": "string"
+        },
+        "severity": {
+          "enum": [
+            "blocking",
+            "warning"
+          ],
+          "title": "Severity",
+          "type": "string"
+        },
+        "source_span_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Span Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "severity",
+        "question"
+      ],
+      "title": "UnresolvedItem",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "actions": {
+      "items": {
+        "$ref": "#/$defs/FsirAction"
+      },
+      "title": "Actions",
+      "type": "array"
+    },
+    "assumptions": {
+      "items": {
+        "$ref": "#/$defs/Assumption"
+      },
+      "title": "Assumptions",
+      "type": "array"
+    },
+    "bounds": {
+      "$ref": "#/$defs/Bounds"
+    },
+    "compatibility": {
+      "$ref": "#/$defs/LegacyCompatibility"
+    },
+    "control": {
+      "$ref": "#/$defs/Control"
+    },
+    "meta": {
+      "$ref": "#/$defs/FsirMeta"
+    },
+    "properties": {
+      "items": {
+        "$ref": "#/$defs/Property"
+      },
+      "title": "Properties",
+      "type": "array"
+    },
+    "provenance": {
+      "$ref": "#/$defs/Provenance"
+    },
+    "state": {
+      "items": {
+        "$ref": "#/$defs/StateVariable"
+      },
+      "title": "State",
+      "type": "array"
+    },
+    "symbols": {
+      "$ref": "#/$defs/SymbolTable"
+    },
+    "unresolved": {
+      "items": {
+        "$ref": "#/$defs/UnresolvedItem"
+      },
+      "title": "Unresolved",
+      "type": "array"
+    }
+  },
+  "required": [
+    "meta",
+    "symbols",
+    "state",
+    "actions",
+    "control",
+    "properties",
+    "assumptions",
+    "bounds",
+    "unresolved",
+    "provenance",
+    "compatibility"
+  ],
+  "title": "FsirDocument",
+  "type": "object"
+}

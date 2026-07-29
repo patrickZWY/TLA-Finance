@@ -481,6 +481,7 @@ api/index.py                  FastAPI app, middleware, routes, static frontend
 public/index.html             Finance Safety Workbench UI
 safety/agent.py               TlaSafetyAgent pipeline
 safety/models.py              FinanceAction and SafetyPolicy models
+safety/fsir.py                Closed typed FSIR v0.1 models, validation, and legacy adapters
 safety/transformer.py         JSON, fenced-block, explicit, and OpenAI action transformers
 safety/validator.py           Deterministic policy mirror
 safety/tla_generator.py       PlusCal/TLA+ and TLC config generator
@@ -498,6 +499,8 @@ config.py                     Runtime configuration helpers
 
 ## Deeper Docs
 
+- [docs/fsir_v0.1.md](docs/fsir_v0.1.md) defines the typed Finance
+  Specification IR boundary, compatibility contract, and seed migration.
 - [docs/local_llm_semantic_extraction.md](docs/local_llm_semantic_extraction.md)
   covers the local Ollama semantic extraction demo.
 - [docs/local_llm_safety_workbench_design.md](docs/local_llm_safety_workbench_design.md)
