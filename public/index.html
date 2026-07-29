@@ -273,6 +273,9 @@
     details.technical summary { cursor: pointer; padding: 10px 12px; font-size: 13px; font-weight: 700; }
     .fixture-toggle { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); font-size: 12px; }
     .fixture-toggle input { width: auto; }
+    .retention-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--panel2); color: var(--muted); font-size: 12px; }
+    .retention-row button { flex: none; padding: 5px 8px; font-size: 11px; }
+    .storage-status { min-height: 16px; color: var(--muted); font-size: 12px; }
     .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
     @media (max-width: 980px) {
       main, .result-grid, .grid2, .journey-layout { grid-template-columns: 1fr; }
@@ -291,6 +294,7 @@
       .approval-bar { align-items: stretch; flex-direction: column; }
       .approval-bar button { width: 100%; }
       .activity-item { grid-template-columns: 1fr; gap: 2px; }
+      .retention-row { align-items: stretch; flex-direction: column; }
     }
     @media (prefers-reduced-motion: reduce) {
       html { scroll-behavior: auto; }
@@ -305,7 +309,7 @@
       <div class="subtle">Bounded planning · reviewable FSIR · formal evidence</div>
     </div>
     <div class="status-row">
-      <span class="badge ok">Local verifier ready</span>
+      <span class="badge warn" id="systemHealth">Verifier status not checked</span>
     </div>
   </header>
 
@@ -360,6 +364,11 @@
           <label class="fixture-toggle"><input type="checkbox" id="fixtureReplay" /> Replay deterministic demo evidence</label>
         </div>
         <div class="disclaimer">Sandbox demo only. It does not execute trades or transfers and is not financial advice.</div>
+        <div class="retention-row">
+          <span>Draft goal, advice, and guardrails are stored in this browser until you clear them. Running a check sends them to the configured semantic-check backend.</span>
+          <button type="button" id="clearLocalDataBtn">Clear local data</button>
+        </div>
+        <div class="storage-status" id="storageStatus" aria-live="polite"></div>
         <div class="error" id="inputError" role="alert"></div>
       </div>
     </section>
@@ -676,6 +685,7 @@ The workbench shall evaluate both choices before approving either one.`,
       });
       document.getElementById('revisionBtn').addEventListener('click', proposeSaferRevision);
       document.getElementById('stopAgentBtn').addEventListener('click', stopAgent);
+      document.getElementById('clearLocalDataBtn').addEventListener('click', clearLocalData);
       document.getElementById('boundedApprovalBtn').addEventListener('click', approveBoundedScope);
       document.getElementById('fsirList').addEventListener('click', handleReviewControl);
       ['userMessage', 'financeAdvice', 'policyBudget', 'policyMaxAction', 'policyBalances', 'policyDestinations', 'policyActionTypes', 'runTlc']
@@ -801,6 +811,7 @@ The workbench shall evaluate both choices before approving either one.`,
           await new Promise((resolve) => window.setTimeout(resolve, 450));
           if (currentController.signal.aborted) throw new DOMException('Agent stopped', 'AbortError');
           data = JSON.parse(JSON.stringify(demoFixtures[example.fixture_key]));
+          setSystemHealth('Deterministic fixture replay', 'warn');
           addActivity('agent', `Replayed deterministic fixture ${example.fixture_key}; no live model call was made.`);
         } else {
           const res = await fetch('/api/semantic-check', {
@@ -819,6 +830,7 @@ The workbench shall evaluate both choices before approving either one.`,
             throw new Error(err.detail || `Server error ${res.status}`);
           }
           data = await res.json();
+          setSystemHealth('Verifier responded · inspect evidence', 'ok');
         }
         currentResult = data;
         saveState();
@@ -828,6 +840,7 @@ The workbench shall evaluate both choices before approving either one.`,
         setError(err.message);
         setBadges([{ text: 'Verification unavailable', kind: 'warn' }]);
         renderUnavailableVerdict(err.message);
+        setSystemHealth('Verifier unavailable', 'bad');
         setAgentState(UI_STATES.VERIFICATION_UNAVAILABLE, 'The verification service did not return evidence. No safety conclusion was made.');
         addActivity('system', `Verification unavailable: ${err.message}`);
       } finally {
@@ -1106,6 +1119,43 @@ The workbench shall evaluate both choices before approving either one.`,
       document.getElementById('approvalCopy').innerHTML = '<strong>Approval blocked.</strong> Review every required node first.';
       document.getElementById('revisionBtn').style.display = 'none';
       setStages('define');
+    }
+
+    function clearLocalData() {
+      if (!window.confirm('Clear the stored goal, advice, guardrails, review state, and activity from this browser?')) return;
+      localStorage.removeItem(STORAGE_KEY);
+      document.getElementById('exampleSelect').value = '0';
+      loadExample();
+      localStorage.removeItem(STORAGE_KEY);
+      document.getElementById('fixtureReplay').checked = false;
+      document.getElementById('runTlc').checked = true;
+      currentResult = null;
+      currentRunId = null;
+      reviewStates = new Map();
+      activity = [];
+      clearError();
+      setBadges([{ text: 'Not run', kind: '' }]);
+      document.getElementById('actionsJson').textContent = '{}';
+      document.getElementById('pythonFindings').innerHTML = '<div class="empty">No run yet.</div>';
+      document.getElementById('tlcStatus').textContent = 'No run yet.';
+      document.getElementById('artifactStatus').textContent = 'No run yet.';
+      document.getElementById('visualSummary').textContent = 'Run a check to populate bounded evidence.';
+      document.getElementById('journeyPanel').style.display = 'none';
+      document.getElementById('visualizationBadge').textContent = 'Run a check to populate evidence';
+      document.getElementById('visualizationBadge').className = 'badge';
+      hideViolationJourney();
+      renderTlcGraph({ status: 'unavailable', message: 'No formal check has run.' }, []);
+      resetReviewSurface();
+      setAgentState(UI_STATES.READY_FOR_REVIEW, 'Local draft cleared. Example defaults were restored; no check has run.');
+      setSystemHealth('Verifier status not checked', 'warn');
+      document.getElementById('storageStatus').textContent = 'Local draft cleared. Example defaults restored.';
+      addActivity('system', 'Cleared stored browser draft and reset the workbench.');
+    }
+
+    function setSystemHealth(text, kind) {
+      const badge = document.getElementById('systemHealth');
+      badge.textContent = text;
+      badge.className = `badge ${kind || ''}`.trim();
     }
 
     function invalidateEvidence(reason, record = true) {

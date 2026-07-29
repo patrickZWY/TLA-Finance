@@ -39,6 +39,20 @@ The unsafe flow supports a counterexample-guided reorder:
 
 The sandbox records approval but never executes a trade or transfer.
 
+## Trust and retention
+
+The header begins in the neutral **Verifier status not checked** state. A ready
+or local verifier is never inferred from page load. The badge changes only
+after live endpoint evidence, deterministic fixture replay, or a request
+failure, and it directs the reviewer to the bounded evidence for configuration
+details.
+
+Goal, advice, and guardrail drafts are stored in browser `localStorage`. This is
+disclosed beside the input controls. **Clear local data** removes the stored
+draft, restores example defaults, clears result/review/activity state, disables
+fixture replay, restores the TLC preference, and returns verifier status to
+unchecked.
+
 ## Explicit UI states
 
 - `clarification_required`

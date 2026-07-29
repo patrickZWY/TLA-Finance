@@ -91,6 +91,35 @@ class BoundedAgentWorkbenchTests(unittest.TestCase):
         ):
             self.assertIn(marker, HTML)
 
+    def test_verifier_status_is_neutral_until_evidence_exists(self):
+        self.assertIn(
+            '<span class="badge warn" id="systemHealth">Verifier status not checked</span>',
+            HTML,
+        )
+        self.assertNotIn("Local verifier ready", HTML)
+        self.assertIn("setSystemHealth('Verifier responded · inspect evidence', 'ok')", HTML)
+        self.assertIn("setSystemHealth('Verifier unavailable', 'bad')", HTML)
+
+    def test_local_draft_retention_is_disclosed_and_clearable(self):
+        self.assertIn("stored in this browser until you clear them", HTML)
+        self.assertIn('id="clearLocalDataBtn"', HTML)
+        clear_body = HTML.split("function clearLocalData() {", 1)[1].split(
+            "function setSystemHealth", 1
+        )[0]
+        self.assertIn("window.confirm(", clear_body)
+        self.assertGreaterEqual(
+            clear_body.count("localStorage.removeItem(STORAGE_KEY)"), 2
+        )
+        for reset_marker in (
+            "loadExample()",
+            "resetReviewSurface()",
+            "activity = []",
+            "currentResult = null",
+            "fixtureReplay",
+            "runTlc",
+        ):
+            self.assertIn(reset_marker, clear_body)
+
 
 if __name__ == "__main__":
     unittest.main()
