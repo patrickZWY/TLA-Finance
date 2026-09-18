@@ -164,3 +164,23 @@ the Mac:
   without Cloudflare changes.
 - Stopping Ollama produces a structured extraction failure instead of a crash.
 - Unsetting `TLAPLUS_JAR`/`TLA_HOME` reports TLA tools as `not_configured`.
+
+## Health Checks
+
+With FastAPI and `cloudflared` running:
+
+```sh
+curl -i http://127.0.0.1:8000/api/health
+curl -I https://live-demo.zhengwangyuan-patrick.com
+curl -I https://demo.zhengwangyuan-patrick.com
+```
+
+If local health is `200` but the live tunnel hostname returns a Cloudflare
+`530`, the `cloudflared tunnel run ...` process is not connected. If the public
+demo hostname returns `503`, the public Worker cannot reach the live tunnel
+hostname. If `scripts/run_cloudflare_demo.sh` fails to bind port `8000`, a
+stale FastAPI process is still running; see [fixes.md](fixes.md).
+
+For the TLC-backed public demo, export `TLA_HOME` (or `TLAPLUS_JAR`) and
+`SAFETY_RUN_TLC=1` before running the script; set `SAFETY_RUN_TLC=0` for a
+faster extractor-and-policy-only demo.
