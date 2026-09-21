@@ -94,77 +94,8 @@ TOOLS = [
 ]
 
 
-def _simulate_payoff(debts: List[Dict], extra: float, strategy: str) -> Dict:
-    from datetime import datetime, timedelta
-    import copy
-
-    working = copy.deepcopy(debts)
-    for d in working:
-        d["rate"] = d["annual_interest_rate"] / 100 / 12
-        d["balance"] = float(d["balance"])
-        d["paid_off_month"] = None
-        d["total_interest"] = 0.0
-
-    month = 0
-    max_months = 600
-    payoff_dates = {}
-
-    while any(d["balance"] > 0 for d in working) and month < max_months:
-        month += 1
-        active = [d for d in working if d["balance"] > 0]
-
-        if strategy == "snowball":
-            active.sort(key=lambda x: x["balance"])
-        else:
-            active.sort(key=lambda x: -x["annual_interest_rate"])
-
-        total_payment = sum(d["minimum_payment"] for d in active) + extra
-
-        for d in active:
-            interest = d["balance"] * d["rate"]
-            d["total_interest"] += interest
-            d["balance"] += interest
-
-        freed_payment = 0.0
-        for i, d in enumerate(active):
-            if i == 0:
-                payment = min(d["balance"], d["minimum_payment"] + extra + freed_payment)
-            else:
-                payment = min(d["balance"], d["minimum_payment"])
-            d["balance"] = max(0, d["balance"] - payment)
-            if d["balance"] == 0 and d["paid_off_month"] is None:
-                d["paid_off_month"] = month
-                freed_payment += d["minimum_payment"]
-
-    from datetime import date
-    from dateutil.relativedelta import relativedelta
-    base = date.today()
-
-    result_debts = []
-    for d in working:
-        months = d.get("paid_off_month") or month
-        payoff_date = (base.replace(day=1) + timedelta(days=32 * months)).replace(day=1)
-        result_debts.append({
-            "name": d["name"],
-            "original_balance": d["balance"] + d["total_interest"],
-            "total_interest_paid": round(d["total_interest"], 2),
-            "paid_off_in_months": d.get("paid_off_month") or month,
-            "payoff_date": payoff_date.strftime("%Y-%m"),
-        })
-
-    total_interest = sum(d["total_interest"] for d in working)
-    return {
-        "strategy": strategy,
-        "total_months": month,
-        "total_interest_paid": round(total_interest, 2),
-        "debts_in_payoff_order": result_debts,
-    }
-
-
 def _simulate_payoff_simple(debts: List[Dict], extra: float, strategy: str) -> Dict:
     from datetime import date
-    import copy
-    import calendar
 
     working = []
     for d in debts:

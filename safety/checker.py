@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import logging
+import re
 import subprocess
 import time
 from dataclasses import dataclass
@@ -13,6 +14,31 @@ import observability
 from config import safety_subprocess_timeout_seconds
 
 logger = logging.getLogger(__name__)
+
+
+def parse_tlc_statistics(output: str) -> dict[str, int]:
+    stats: dict[str, int] = {}
+    states = re.search(
+        r"([\d,]+) states generated, ([\d,]+) distinct states found, ([\d,]+) states left on queue",
+        output,
+    )
+    if states:
+        stats.update(
+            states_generated=int(states.group(1).replace(",", "")),
+            distinct_states=int(states.group(2).replace(",", "")),
+            states_left=int(states.group(3).replace(",", "")),
+        )
+    depth = re.search(r"depth of the complete state graph search is ([\d,]+)", output)
+    if depth:
+        stats["search_depth"] = int(depth.group(1).replace(",", ""))
+    return stats
+
+
+def parse_tlc_counterexample_history(output: str) -> list[str]:
+    histories = re.findall(r'history = <<([^>]*)>>', output)
+    if not histories:
+        return []
+    return re.findall(r'"([^"]+)"', histories[-1])
 
 
 @dataclass(frozen=True)
@@ -79,6 +105,14 @@ def find_tla_tools_jar() -> Path | None:
     ):
         if candidate.exists():
             return candidate
+
+    vscode_extensions = Path.home() / ".vscode" / "extensions"
+    extension_jars = sorted(
+        vscode_extensions.glob("tlaplus.vscode-ide-*/tools/tla2tools.jar"),
+        reverse=True,
+    )
+    if extension_jars:
+        return extension_jars[0]
 
     return None
 

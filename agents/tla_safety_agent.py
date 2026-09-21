@@ -17,6 +17,7 @@ def run(
     *,
     run_name: str | None = None,
     artifact_root: Path | str = Path("artifacts/safety-runs"),
+    run_policy_checker: bool = True,
     run_model_checker: bool = True,
     user_decision: str | None = None,
     structured_json: bool = False,
@@ -39,6 +40,7 @@ def run(
         finance_agent_output,
         policy,
         run_name=run_name,
+        run_policy_checker=run_policy_checker,
         run_model_checker=run_model_checker,
         user_decision=user_decision,  # type: ignore[arg-type]
     ).to_json()

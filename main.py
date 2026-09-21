@@ -2,9 +2,7 @@
 """Personal Finance Agent — orchestrates budget, goal, investment, and debt subagents."""
 
 import json
-import os
 import sys
-from typing import Any, Dict
 
 from dotenv import load_dotenv
 from rich.console import Console
@@ -39,79 +37,6 @@ Rules:
 - If the user's intent is unclear, ask ONE clarifying question before delegating
 
 Respond in a warm, encouraging tone. Help users feel in control of their finances."""
-
-ORCHESTRATOR_TOOLS = [
-    {"type": "function", "function": {
-        "name": "consult_budget_agent",
-        "description": (
-            "Delegate to the budget tracking specialist. Use for: adding transactions (income/expenses), "
-            "viewing spending summaries, setting monthly budget limits, analyzing spending by category."
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "task": {
-                    "type": "string",
-                    "description": "The budget task or question, including all relevant numbers and context from the user",
-                }
-            },
-            "required": ["task"],
-        },
-    }},
-    {"type": "function", "function": {
-        "name": "consult_goal_agent",
-        "description": (
-            "Delegate to the financial goal planning specialist. Use for: creating savings goals, "
-            "tracking progress toward goals, calculating required monthly savings, updating goal amounts."
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "task": {
-                    "type": "string",
-                    "description": "The goal planning task, including target amounts, deadlines, and current savings",
-                }
-            },
-            "required": ["task"],
-        },
-    }},
-    {"type": "function", "function": {
-        "name": "consult_investment_agent",
-        "description": (
-            "Delegate to the investment guide specialist. Use for: setting a risk profile, getting portfolio "
-            "allocation recommendations, projecting compound growth, comparing investment scenarios, "
-            "explaining investment types (ETFs, index funds, Roth IRA, 401k, etc.)."
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "task": {
-                    "type": "string",
-                    "description": "The investment question or task, including risk tolerance, amounts, and time horizon",
-                }
-            },
-            "required": ["task"],
-        },
-    }},
-    {"type": "function", "function": {
-        "name": "consult_debt_agent",
-        "description": (
-            "Delegate to the debt payoff specialist. Use for: adding debts to track, viewing debt summary, "
-            "calculating snowball or avalanche payoff plans, comparing payoff strategies, updating balances."
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "task": {
-                    "type": "string",
-                    "description": "The debt management task, including balances, interest rates, and available extra payments",
-                }
-            },
-            "required": ["task"],
-        },
-    }},
-]
-
 
 AGENT_MAP = None  # lazy import
 

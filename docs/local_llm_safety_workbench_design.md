@@ -53,15 +53,15 @@ Structured result for UI
 
 ## Frontend
 
-The frontend is a single static page at `public/index.html`, served by FastAPI.
+The frontend is a small static app in `public/index.html`, `public/styles.css`, and `public/app.js`, served by FastAPI.
 
 It has three main areas:
 
 - Input: pre-populated ambiguous finance messages or custom user text.
 - Security invariants: budget, max individual amount, account balances, allowed
   destinations, and allowed action types.
-- Result: normalized actions, Python findings, TLC status/output, artifacts,
-  usage metadata, and raw model output on extraction failure.
+- Result: one verdict, normalized actions, safety findings, formal-check status,
+  and optional technical details. Raw model output appears only on extraction failure.
 
 The UI talks only to `/api/semantic-check` for this demo path.
 
@@ -179,8 +179,8 @@ Expected result:
 
 ## Next Design Steps
 
-- Add mocked endpoint tests for success and extraction-failure responses.
-- Add screenshot or short recording documentation for the two successful demos.
+- Keep mocked endpoint tests for success and extraction-failure responses current.
+- Add screenshot or short recording documentation for the canonical safe and unsafe demos.
 - Add optional model selection if comparing local parsers becomes useful.
 - Keep any future finance-agent simulation separate from the semantic extractor
   so extraction quality remains testable in isolation.

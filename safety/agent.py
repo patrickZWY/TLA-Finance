@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -16,12 +17,9 @@ from safety.models import SafetyInputError, SafetyPolicy, dump_actions
 from safety.tla_generator import generate_tla, write_tla_artifacts
 from safety.transformer import ActionTransformer, JsonActionTransformer
 from safety.validator import SafetyFinding, evaluate_policy
-from safety.visualization import build_violation_visualization
-
 
 UserDecision = Literal["stop", "continue"]
 logger = logging.getLogger(__name__)
-
 
 @dataclass(frozen=True)
 class TlaSafetyAgentResult:
@@ -37,7 +35,6 @@ class TlaSafetyAgentResult:
     tlc: dict[str, object]
     transformer_usage: dict[str, object]
     observability: dict[str, object]
-    violation_visualization: dict[str, Any] | None = None
 
     @property
     def requires_user_decision(self) -> bool:
@@ -59,17 +56,15 @@ class TlaSafetyAgentResult:
             "tlc": self.tlc,
             "transformer_usage": self.transformer_usage,
             "observability": self.observability,
-            "violation_visualization": self.violation_visualization,
         }
-
 
 class TlaSafetyAgent:
     """Checks untrusted finance-agent actions before execution.
 
     The agent performs the complete v1 pipeline:
-    transform finance-agent output to action JSON, evaluate the policy mirror,
-    generate PlusCal/TLA+ artifacts, translate PlusCal, run TLC, and produce a
-    decision report for the caller/API.
+    transform finance-agent output to action JSON, optionally evaluate the
+    Python policy mirror, generate PlusCal/TLA+ artifacts, translate PlusCal,
+    run TLC, and produce a decision report for the caller/API.
     """
 
     def __init__(
@@ -86,6 +81,7 @@ class TlaSafetyAgent:
         policy: SafetyPolicy | dict[str, Any],
         *,
         run_name: str | None = None,
+        run_policy_checker: bool = True,
         run_model_checker: bool = True,
         user_decision: UserDecision | None = None,
         run_id: str | None = None,
@@ -104,6 +100,7 @@ class TlaSafetyAgent:
             "safety.pipeline.start",
             safety_run_id=run_id,
             transformer_name=transformer_name,
+            policy_checker_enabled=run_policy_checker,
             model_checker_enabled=run_model_checker,
             artifact_dir=str(artifact_dir),
         )
@@ -120,15 +117,19 @@ class TlaSafetyAgent:
             ):
                 actions = self.transformer.transform(finance_agent_output)
         transformer_usage = getattr(self.transformer, "last_usage_estimate", {})
-        with observability.timed_stage(
-            stage_durations_ms,
-            "evaluate_policy",
-            logger,
-            "safety.pipeline.stage",
-            safety_run_id=run_id,
-            action_count=len(actions),
-        ):
-            findings = evaluate_policy(actions, resolved_policy)
+        if run_policy_checker:
+            with observability.timed_stage(
+                stage_durations_ms,
+                "evaluate_policy",
+                logger,
+                "safety.pipeline.stage",
+                safety_run_id=run_id,
+                action_count=len(actions),
+            ):
+                findings = evaluate_policy(actions, resolved_policy)
+        else:
+            stage_durations_ms["evaluate_policy"] = 0
+            findings = []
 
         module_name = f"FinanceSafety_{run_name}"
         with observability.timed_stage(stage_durations_ms, "generate_tla"):
@@ -169,14 +170,6 @@ class TlaSafetyAgent:
                 "output": "TLC run skipped.",
             }
 
-        visualization = build_violation_visualization(
-            actions,
-            resolved_policy,
-            findings,
-            tlc_status=str(tlc.get("status", "unknown")),
-            dot_path=artifact_dir / "tlc_state_graph.dot",
-        )
-
         decision = _resolve_decision(findings, user_decision)
         observability_info: dict[str, object] = {
             "run_id": run_id,
@@ -186,6 +179,7 @@ class TlaSafetyAgent:
             "transformer_name": transformer_name,
             "action_count": len(actions),
             "finding_codes": [finding.code for finding in findings],
+            "policy_checker_enabled": run_policy_checker,
             "model_checker_enabled": run_model_checker,
         }
         result = TlaSafetyAgentResult(
@@ -199,7 +193,6 @@ class TlaSafetyAgent:
             tlc=tlc,
             transformer_usage=transformer_usage,
             observability=observability_info,
-            violation_visualization=visualization,
         )
         (artifact_dir / "report.json").write_text(
             json.dumps(result.to_json(), indent=2) + "\n",
@@ -246,7 +239,7 @@ class TlaSafetyAgent:
                 "output": "TLC skipped because PlusCal translation did not complete.",
             }
 
-        result = run_tlc(tla_path, cfg_path, dot_path=artifact_dir / "tlc_state_graph.dot")
+        result = run_tlc(tla_path, cfg_path)
         tlc = result.to_json()
         (artifact_dir / "tlc_output.txt").write_text(result.output, encoding="utf-8")
         if result.status == "not_configured":
@@ -258,15 +251,16 @@ class TlaSafetyAgent:
                 )
             )
         elif result.status in {"failed", "timeout"}:
+            invariant_violation = result.status == "failed" and tlc_violation_action_index(result.output) is not None
             findings.append(
                 SafetyFinding(
-                    code=f"tlc_{result.status}",
+                    code="tlc_invariant_violation" if invariant_violation else f"tlc_{result.status}",
                     severity="error",
                     message=summarize_tlc_failure(result.output),
+                    action_index=tlc_violation_action_index(result.output),
                 )
             )
         return pluscal, tlc
-
 
 def run(
     finance_agent_output: str,
@@ -274,6 +268,7 @@ def run(
     *,
     run_name: str | None = None,
     artifact_root: Path | str = Path("artifacts/safety-runs"),
+    run_policy_checker: bool = True,
     run_model_checker: bool = True,
     user_decision: UserDecision | None = None,
 ) -> dict[str, Any]:
@@ -284,18 +279,25 @@ def run(
         finance_agent_output,
         policy,
         run_name=run_name,
+        run_policy_checker=run_policy_checker,
         run_model_checker=run_model_checker,
         user_decision=user_decision,
     ).to_json()
 
-
 def summarize_tlc_failure(output: str) -> str:
     for line in output.splitlines():
         text = line.strip()
-        if "Invariant" in text or "invariant" in text:
+        if "invariant" in text.lower() and "violated" in text.lower():
             return f"TLC did not verify the generated safety model: {text}"
     return "TLC did not verify the generated safety model. See tlc_output.txt."
 
+def tlc_violation_action_index(output: str) -> int | None:
+    if "Invariant" not in output or "violated" not in output:
+        return None
+    state_indices = re.findall(r"^/\\ idx = (\d+)\s*$", output, flags=re.MULTILINE)
+    if not state_indices:
+        return None
+    return max(1, int(state_indices[-1]) - 1)
 
 def _coerce_policy(policy: SafetyPolicy | dict[str, Any]) -> SafetyPolicy:
     if isinstance(policy, SafetyPolicy):
@@ -303,7 +305,6 @@ def _coerce_policy(policy: SafetyPolicy | dict[str, Any]) -> SafetyPolicy:
     if isinstance(policy, dict):
         return SafetyPolicy.from_json(policy)
     raise SafetyInputError("policy must be a SafetyPolicy or JSON object")
-
 
 def _resolve_decision(findings: list[SafetyFinding], user_decision: UserDecision | None) -> str:
     if not findings:

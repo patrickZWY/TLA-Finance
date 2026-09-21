@@ -2,6 +2,7 @@ import json
 import os
 import unittest
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -156,7 +157,170 @@ class ApiSafetyFlowTests(unittest.TestCase):
         self.assertTrue(payload["safe_to_execute"])
         self.assertEqual(payload["decision"], "safe")
         self.assertEqual(len(payload["normalized_actions"]["actions"]), 2)
-        self.assertIsNone(payload["violation_visualization"]["journey"])
+        self.assertNotIn("report", payload)
+        self.assertNotIn("violation_visualization", payload)
+
+    def test_structured_hundred_action_case_fails_only_at_final_step(self):
+        actions = []
+        route = [
+            ("checking", "brokerage"),
+            ("brokerage", "savings"),
+            ("savings", "emergency"),
+            ("emergency", "checking"),
+        ]
+        for cycle in range(24):
+            amount = 7 + ((cycle * 13) % 34)
+            actions.extend(
+                {"action": "transfer", "amount": amount, "from": source, "to": destination}
+                for source, destination in route
+            )
+        actions.extend(
+            {"action": "transfer", "amount": 37, "from": source, "to": destination}
+            for source, destination in route[:3]
+        )
+        actions.append(
+            {"action": "transfer", "amount": 38, "from": "emergency", "to": "checking"}
+        )
+        self.assertEqual(len(actions), 100)
+
+        with patch.object(api_index, "OpenAIActionTransformer") as transformer_cls:
+            response = self.client.post(
+                "/api/semantic-check",
+                json={
+                    "user_message": "Check all 100 actions.",
+                    "finance_advice": "Structured 100-action sequence.",
+                    "normalized_actions": {"actions": actions},
+                    "policy": {
+                        "budget": 5000,
+                        "max_individual_action_amount": 50,
+                        "account_balances": {
+                            "checking": 1000,
+                            "brokerage": 0,
+                            "savings": 0,
+                            "emergency": 0,
+                        },
+                        "allowed_destination_accounts": [
+                            "checking",
+                            "brokerage",
+                            "savings",
+                            "emergency",
+                        ],
+                        "allowed_action_types": ["transfer"],
+                    },
+                    "run_model_checker": False,
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        transformer_cls.assert_not_called()
+        payload = response.json()
+        self.assertEqual(payload["input_mode"], "structured")
+        self.assertEqual(len(payload["normalized_actions"]["actions"]), 100)
+        self.assertFalse(payload["safe_to_execute"])
+        self.assertEqual(
+            [(finding["code"], finding["action_index"]) for finding in payload["all_findings"]],
+            [("negative_source_balance", 100)],
+        )
+
+    def test_semantic_check_rejects_disabling_both_checkers(self):
+        response = self.client.post(
+            "/api/semantic-check",
+            json={
+                "user_message": "Check this action.",
+                "finance_advice": "Transfer $1 from checking to brokerage.",
+                "normalized_actions": {
+                    "actions": [
+                        {
+                            "action": "transfer",
+                            "amount": 1,
+                            "from": "checking",
+                            "to": "brokerage",
+                        }
+                    ]
+                },
+                "policy": load_json_fixture("policy.dev.json"),
+                "run_policy_checker": False,
+                "run_model_checker": False,
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("Enable Python policy checks", response.json()["detail"])
+
+    def test_branching_benchmark_uses_tlc_without_python_policy_check(self):
+        tlc_output = """Error: Invariant NoNegativeBalances is violated.
+/\\ history = <<"A", "A", "A", "A", "A", "A", "A", "A", "Final settlement">>
+87,382 states generated, 87,382 distinct states found, 65,535 states left on queue.
+The depth of the complete state graph search is 10.
+"""
+        pluscal = SimpleNamespace(
+            translated=True,
+            status="translated",
+            output="Translation completed.",
+            to_json=lambda: {
+                "status": "translated",
+                "command": [],
+                "returncode": 0,
+                "output": "Translation completed.",
+            },
+        )
+        tlc = SimpleNamespace(
+            output=tlc_output,
+            to_json=lambda: {
+                "status": "failed",
+                "command": [],
+                "returncode": 12,
+                "output": tlc_output,
+            },
+        )
+        with TemporaryDirectory() as directory, patch.object(
+            api_index, "_safety_artifact_root", return_value=Path(directory)
+        ), patch.object(api_index, "translate_pluscal", return_value=pluscal), patch.object(
+            api_index, "run_tlc", return_value=tlc
+        ), patch.object(api_index, "evaluate_policy") as evaluate:
+            response = self.client.post(
+                "/api/semantic-check",
+                json={
+                    "user_message": "Check every routing plan.",
+                    "finance_advice": "Choose A, B, C, or D for eight rounds.",
+                    "benchmark": "four_way_liquidity",
+                    "policy": {
+                        "budget": 1000,
+                        "max_individual_action_amount": 1,
+                        "account_balances": {
+                            "reserve": 8,
+                            "operations": 100,
+                            "checking": 100,
+                            "savings": 100,
+                            "brokerage": 100,
+                            "payroll": 0,
+                        },
+                        "allowed_destination_accounts": [
+                            "operations",
+                            "savings",
+                            "brokerage",
+                            "checking",
+                            "payroll",
+                        ],
+                        "allowed_action_types": ["transfer"],
+                    },
+                    "run_policy_checker": False,
+                    "run_model_checker": True,
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        evaluate.assert_not_called()
+        payload = response.json()
+        self.assertEqual(payload["input_mode"], "branching")
+        self.assertFalse(payload["python_policy_enabled"])
+        self.assertEqual(payload["decision_plan"]["complete_plans"], 65536)
+        self.assertEqual(payload["decision_plan"]["tlc_statistics"]["distinct_states"], 87382)
+        self.assertEqual(
+            payload["decision_plan"]["counterexample_path"],
+            ["A"] * 8 + ["Final settlement"],
+        )
+        self.assertEqual(payload["all_findings"][0]["action_index"], 9)
 
     def test_semantic_check_unsafe_destination_returns_findings(self):
         actions = load_actions(load_json_fixture("actions.destination_violation.json"))
@@ -175,7 +339,6 @@ class ApiSafetyFlowTests(unittest.TestCase):
         self.assertFalse(payload["safe_to_execute"])
         codes = {finding["code"] for finding in payload["all_findings"]}
         self.assertIn("disallowed_destination", codes)
-        self.assertEqual(payload["violation_visualization"]["journey"]["first_violating_state"], 1)
         self.assertNotIn("directory", payload["artifacts"])
 
     def test_semantic_check_extraction_failure_skips_policy_and_tlc(self):
@@ -196,7 +359,6 @@ class ApiSafetyFlowTests(unittest.TestCase):
         self.assertFalse(payload["safe_to_execute"])
         self.assertEqual(payload["decision"], "extraction_failed")
         self.assertEqual(payload["tlc"]["status"], "skipped")
-        self.assertIsNone(payload["violation_visualization"])
         agent_cls.assert_not_called()
 
     def test_chat_request_logs_selected_agents_and_safety_status(self):

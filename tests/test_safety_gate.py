@@ -2,10 +2,11 @@ import json
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
-from safety.agent import TlaSafetyAgent, run
+from safety.agent import TlaSafetyAgent, run, summarize_tlc_failure, tlc_violation_action_index
 from safety.models import FinanceAction, SafetyPolicy, load_actions
-from safety.tla_generator import generate_tla
+from safety.tla_generator import generate_branching_tla, generate_tla
 from safety.transformer import ExplicitRequestActionTransformer, FinanceActionsBlockTransformer, estimate_transform_tokens
 from safety.validator import evaluate_policy
 
@@ -56,6 +57,25 @@ class SafetyGateTests(unittest.TestCase):
         self.assertIn("SPECIFICATION Spec", generated.cfg_text)
         self.assertIn("Actions ==", generated.tla_text)
 
+    def test_branching_generator_emits_four_way_choice_per_round(self):
+        actions = [
+            FinanceAction("transfer", 1, "checking", "brokerage"),
+            FinanceAction("transfer", 1, "brokerage", "savings"),
+            FinanceAction("transfer", 1, "savings", "checking"),
+            FinanceAction("transfer", 1, "checking", "savings"),
+        ]
+        generated = generate_branching_tla(
+            actions,
+            FinanceAction("transfer", 1, "checking", "brokerage"),
+            self.policy,
+            "Branching_Test",
+            rounds=8,
+        )
+        self.assertIn("DecisionRounds == 8", generated.tla_text)
+        self.assertEqual(generated.tla_text.count("with (a = DecisionActions["), 4)
+        self.assertIn('history := Append(history, "Final settlement")', generated.tla_text)
+        self.assertIn("INVARIANT NoNegativeBalances", generated.cfg_text)
+
     def test_tla_safety_agent_returns_safe_decision_for_safe_actions(self):
         with TemporaryDirectory() as tmpdir:
             agent = TlaSafetyAgent(artifact_root=Path(tmpdir))
@@ -75,6 +95,42 @@ class SafetyGateTests(unittest.TestCase):
             self.assertEqual(report["observability"]["action_count"], 2)
             self.assertEqual(report["observability"]["model_checker_enabled"], False)
             self.assertIn("formal_checks", report["observability"]["stage_durations_ms"])
+
+    def test_tla_safety_agent_can_skip_python_policy_evaluation(self):
+        with TemporaryDirectory() as tmpdir:
+            agent = TlaSafetyAgent(artifact_root=Path(tmpdir))
+            formal_result = (
+                {"status": "translated", "command": [], "returncode": 0, "output": ""},
+                {"status": "passed", "command": [], "returncode": 0, "output": ""},
+            )
+            with patch("safety.agent.evaluate_policy") as evaluate, patch.object(
+                agent, "_run_formal_checks", return_value=formal_result
+            ):
+                result = agent.check(
+                    json.dumps(load_fixture("actions.balance_violation.json")),
+                    self.policy,
+                    run_name="tlc-only-test",
+                    run_policy_checker=False,
+                    run_model_checker=True,
+                )
+
+            evaluate.assert_not_called()
+            self.assertTrue(result.safe_to_execute)
+            self.assertFalse(result.observability["policy_checker_enabled"])
+
+    def test_tlc_trace_maps_final_state_to_action_number(self):
+        output = """Warning: The invariant PositiveAmounts is a constant-level formula.
+Error: Invariant NoNegativeBalances is violated.
+State 100:
+/\\ idx = 100
+State 101:
+/\\ idx = 101
+"""
+        self.assertEqual(tlc_violation_action_index(output), 100)
+        self.assertIn(
+            "Invariant NoNegativeBalances is violated",
+            summarize_tlc_failure(output),
+        )
 
     def test_tla_safety_agent_requires_decision_for_unsafe_actions(self):
         with TemporaryDirectory() as tmpdir:

@@ -197,6 +197,81 @@ NoDetectedViolations == violations = {{}}
 '''
     return GeneratedTla(module_name=module_name, tla_text=tla_text, cfg_text=_generate_cfg())
 
+def generate_branching_tla(
+    decision_actions: list[FinanceAction],
+    final_action: FinanceAction,
+    policy: SafetyPolicy,
+    module_name: str,
+    *,
+    rounds: int = 8,
+) -> GeneratedTla:
+    """Generate a four-way choice at every round, preserving path history."""
+
+    if len(decision_actions) != 4:
+        raise ValueError("branching benchmark requires exactly four decision actions")
+    if rounds < 1:
+        raise ValueError("branching benchmark requires at least one round")
+
+    module_name = sanitize_module_name(module_name)
+    branches = "\n  or\n".join(
+        fr'''  {{
+    with (a = DecisionActions[{index}]) {{
+      history := Append(history, DecisionNames[{index}]);
+      spent := spent + a.amount;
+      balances := BalancesAfter(a, balances);
+    }};
+  }}'''
+        for index in range(1, 5)
+    )
+    tla_text = fr'''---- MODULE {module_name} ----
+EXTENDS Integers, Sequences, FiniteSets
+
+\* Eight rounds, four choices per round. History is retained deliberately so
+\* TLC explores each decision path instead of merging equal balance states.
+DecisionRounds == {rounds}
+InitialBalances == {_tla_function(policy.account_balances)}
+DecisionNames == <<"A", "B", "C", "D">>
+DecisionActions == {_tla_sequence([_tla_action(action) for action in decision_actions])}
+FinalAction == {_tla_action(final_action)}
+
+BalancesAfter(a, b) ==
+  LET afterDebit == [b EXCEPT ![a.src] = @ - a.amount] IN
+    [afterDebit EXCEPT ![a.dst] = @ + a.amount]
+
+(*
+--algorithm BranchingLiquidity {{
+variables
+  round = 1,
+  balances = InitialBalances,
+  spent = 0,
+  history = <<>>;
+{{
+  while (round <= DecisionRounds) {{
+    either
+{branches}
+    ;
+    round := round + 1;
+  }};
+  with (a = FinalAction) {{
+    spent := spent + a.amount;
+    balances := BalancesAfter(a, balances);
+    history := Append(history, "Final settlement");
+  }};
+}}
+}}
+*)
+
+NoNegativeBalances ==
+  \A acct \in DOMAIN balances : balances[acct] >= 0
+
+====
+'''
+    cfg_text = """SPECIFICATION Spec
+
+INVARIANT NoNegativeBalances
+"""
+    return GeneratedTla(module_name=module_name, tla_text=tla_text, cfg_text=cfg_text)
+
 
 def write_tla_artifacts(generated: GeneratedTla, artifact_dir: Path) -> tuple[Path, Path]:
     artifact_dir.mkdir(parents=True, exist_ok=True)

@@ -41,9 +41,16 @@ from config import (
     trusted_hosts,
 )
 import observability
-from safety.agent import TlaSafetyAgentResult
+from safety.agent import TlaSafetyAgentResult, summarize_tlc_failure
 from safety.artifacts import cleanup_old_safety_artifacts
-from safety.models import FinanceAction, SafetyInputError, SafetyPolicy, dump_actions
+from safety.checker import (
+    parse_tlc_counterexample_history,
+    parse_tlc_statistics,
+    run_tlc,
+    translate_pluscal,
+)
+from safety.models import FinanceAction, SafetyInputError, SafetyPolicy, dump_actions, load_actions
+from safety.tla_generator import generate_branching_tla, write_tla_artifacts
 from safety.transformer import (
     ExplicitRequestActionTransformer,
     FinanceActionsBlockTransformer,
@@ -72,6 +79,7 @@ DEFAULT_RATE_LIMITS: Dict[str, tuple[int, int]] = {
 DEFAULT_REQUEST_LIMITS = {
     "user_message_chars": 4_000,
     "finance_advice_chars": 12_000,
+    "actions_json_bytes": 128_000,
     "history_items": 40,
     "history_json_bytes": 32_000,
     "policy_json_bytes": 32_000,
@@ -194,6 +202,8 @@ def _validate_semantic_check_request(req: "SemanticCheckRequest") -> None:
     _validate_text_size("user_message", req.user_message, limits["user_message_chars"])
     _validate_text_size("finance_advice", req.finance_advice, limits["finance_advice_chars"])
     _validate_json_size("policy", req.policy, limits["policy_json_bytes"])
+    if req.normalized_actions is not None:
+        _validate_json_size("normalized_actions", req.normalized_actions, limits["actions_json_bytes"])
 
 
 def _validate_text_size(field: str, value: str, max_chars: int) -> None:
@@ -332,7 +342,10 @@ class SafetyDemoRequest(BaseModel):
 class SemanticCheckRequest(BaseModel):
     user_message: str = ""
     finance_advice: str
+    normalized_actions: Optional[Dict[str, Any]] = None
+    benchmark: Optional[str] = None
     policy: Dict[str, Any]
+    run_policy_checker: bool = True
     run_model_checker: Optional[bool] = None
 
 
@@ -519,6 +532,10 @@ def _semantic_check(req: SemanticCheckRequest) -> Dict[str, Any]:
     if not advice:
         raise SafetyInputError("finance_advice must not be empty")
     policy = SafetyPolicy.from_json(req.policy)
+    run_policy_checker = bool(req.run_policy_checker)
+    run_model_checker = _should_run_tlc() if req.run_model_checker is None else bool(req.run_model_checker)
+    if not run_policy_checker and not run_model_checker:
+        raise SafetyInputError("Enable Python policy checks, PlusCal / TLC, or both.")
     safety_input = (
         "User request:\n"
         f"{req.user_message.strip() or '(none)'}\n\n"
@@ -526,39 +543,52 @@ def _semantic_check(req: SemanticCheckRequest) -> Dict[str, Any]:
         f"{advice}"
     )
 
-    transformer = OpenAIActionTransformer()
-    try:
-        actions = transformer.transform(safety_input)
-    except SafetyInputError as exc:
-        observability.log_event(
-            logger,
-            "api.semantic_check.extraction_failed",
-            level=logging.WARNING,
-            error_type=type(exc).__name__,
-            error=str(exc),
-        )
-        observability.log_event(
-            logger,
-            "api.semantic_check.end",
-            level=logging.WARNING,
-            status="extraction_failed",
-            duration_ms=observability.elapsed_ms(start),
-        )
-        return _semantic_extraction_error_response(exc, transformer)
+    if req.benchmark is not None:
+        if req.benchmark != "four_way_liquidity":
+            raise SafetyInputError("Unknown model-checking benchmark.")
+        if not run_model_checker:
+            raise SafetyInputError("The branching benchmark requires PlusCal / TLC.")
+        return _run_branching_benchmark(req, policy, safety_input, start)
 
-    policy_findings = evaluate_policy(actions, policy)
-    run_model_checker = _should_run_tlc() if req.run_model_checker is None else bool(req.run_model_checker)
+    input_mode = "structured" if req.normalized_actions is not None else "semantic"
+    if req.normalized_actions is not None:
+        actions = load_actions(req.normalized_actions, allow_empty=True)
+        transformer_usage: Dict[str, Any] = {"mode": "structured_stress_test"}
+    else:
+        transformer = OpenAIActionTransformer()
+        try:
+            actions = transformer.transform(safety_input)
+        except SafetyInputError as exc:
+            observability.log_event(
+                logger,
+                "api.semantic_check.extraction_failed",
+                level=logging.WARNING,
+                error_type=type(exc).__name__,
+                error=str(exc),
+            )
+            observability.log_event(
+                logger,
+                "api.semantic_check.end",
+                level=logging.WARNING,
+                status="extraction_failed",
+                duration_ms=observability.elapsed_ms(start),
+            )
+            return _semantic_extraction_error_response(exc, transformer, run_policy_checker)
+        transformer_usage = getattr(transformer, "last_usage_estimate", {})
+
+    policy_findings = evaluate_policy(actions, policy) if run_policy_checker else []
     run_name = _semantic_run_name()
     run_id = observability.new_id("semantic")
 
     checker = TlaSafetyAgent(
-        transformer=_PrecomputedActionTransformer(actions, getattr(transformer, "last_usage_estimate", {})),
+        transformer=_PrecomputedActionTransformer(actions, transformer_usage),
         artifact_root=_safety_artifact_root(),
     )
     result = checker.check(
         safety_input,
         policy,
         run_name=run_name,
+        run_policy_checker=run_policy_checker,
         run_model_checker=run_model_checker,
         run_id=run_id,
     )
@@ -567,32 +597,28 @@ def _semantic_check(req: SemanticCheckRequest) -> Dict[str, Any]:
     # is not a browser capability.  Return only a non-addressable summary.
     public_pluscal = _public_checker_status(report["pluscal"])
     public_tlc = _public_checker_status(report["tlc"])
-    public_report = {
-        **report,
-        "artifacts": {"generated": True},
-        "pluscal": public_pluscal,
-        "tlc": public_tlc,
-    }
     response = {
         "safe_to_execute": result.safe_to_execute,
         "decision": result.decision,
+        "input_mode": input_mode,
+        "python_policy_enabled": run_policy_checker,
         "normalized_actions": dump_actions(actions),
         "python_policy_findings": [finding.to_json() for finding in policy_findings],
         "all_findings": report["findings"],
         "pluscal": public_pluscal,
         "tlc": public_tlc,
-        "artifacts": public_report["artifacts"],
+        "artifacts": {"generated": True},
         "transformer_usage": report["transformer_usage"],
         "observability": report["observability"],
-        "violation_visualization": report["violation_visualization"],
-        "report": public_report,
     }
     observability.log_event(
         logger,
         "api.semantic_check.end",
         status="ok",
         action_count=len(actions),
+        input_mode=input_mode,
         policy_finding_count=len(policy_findings),
+        policy_checker_enabled=run_policy_checker,
         model_checker_enabled=run_model_checker,
         safe_to_execute=result.safe_to_execute,
         duration_ms=observability.elapsed_ms(start),
@@ -600,13 +626,161 @@ def _semantic_check(req: SemanticCheckRequest) -> Dict[str, Any]:
     return response
 
 
+def _run_branching_benchmark(
+    req: SemanticCheckRequest,
+    policy: SafetyPolicy,
+    safety_input: str,
+    start: float,
+) -> Dict[str, Any]:
+    rounds = 8
+    decision_actions = [
+        FinanceAction("transfer", 1, "reserve", "operations"),
+        FinanceAction("transfer", 1, "checking", "savings"),
+        FinanceAction("transfer", 1, "savings", "brokerage"),
+        FinanceAction("transfer", 1, "brokerage", "checking"),
+    ]
+    final_action = FinanceAction("transfer", 1, "reserve", "payroll")
+    run_name = _semantic_run_name()
+    run_id = observability.new_id("branching")
+    artifact_dir = Path(_safety_artifact_root()) / run_name
+    generated = generate_branching_tla(
+        decision_actions,
+        final_action,
+        policy,
+        f"BranchingLiquidity_{run_name}",
+        rounds=rounds,
+    )
+    tla_path, cfg_path = write_tla_artifacts(generated, artifact_dir)
+    (artifact_dir / "finance_agent_output.txt").write_text(safety_input, encoding="utf-8")
+    (artifact_dir / "policy.json").write_text(
+        json.dumps(policy.to_json(), indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+    pluscal_start = time.perf_counter()
+    pluscal = translate_pluscal(tla_path)
+    pluscal_ms = observability.elapsed_ms(pluscal_start)
+    (artifact_dir / "pcal_output.txt").write_text(pluscal.output, encoding="utf-8")
+
+    tlc_ms = 0
+    if pluscal.translated:
+        tlc_start = time.perf_counter()
+        tlc_result = run_tlc(tla_path, cfg_path)
+        tlc_ms = observability.elapsed_ms(tlc_start)
+        tlc = tlc_result.to_json()
+        (artifact_dir / "tlc_output.txt").write_text(tlc_result.output, encoding="utf-8")
+        stats = parse_tlc_statistics(tlc_result.output)
+        counterexample = parse_tlc_counterexample_history(tlc_result.output)
+    else:
+        tlc = {
+            "status": "skipped",
+            "command": [],
+            "returncode": None,
+            "output": "TLC skipped because PlusCal translation did not complete.",
+        }
+        stats = {}
+        counterexample = []
+
+    findings: list[Dict[str, Any]] = []
+    if tlc["status"] == "failed":
+        invariant_violation = bool(counterexample)
+        finding: Dict[str, Any] = {
+            "code": "tlc_invariant_violation" if invariant_violation else "tlc_failed",
+            "severity": "error",
+            "message": summarize_tlc_failure(str(tlc["output"])),
+        }
+        if invariant_violation:
+            finding["action_index"] = rounds + 1
+            finding["counterexample_path"] = counterexample
+        findings.append(finding)
+    elif tlc["status"] in {"timeout", "not_configured"}:
+        findings.append(
+            {
+                "code": f"tlc_{tlc['status']}",
+                "severity": "error",
+                "message": f"TLC {str(tlc['status']).replace('_', ' ')}.",
+            }
+        )
+    elif not pluscal.translated:
+        findings.append(
+            {
+                "code": f"pluscal_{pluscal.status}",
+                "severity": "error",
+                "message": "PlusCal translation did not complete.",
+            }
+        )
+
+    safe_to_execute = pluscal.translated and tlc["status"] == "passed"
+    complete_plans = len(decision_actions) ** rounds
+    decision_plan = {
+        "rounds": rounds,
+        "branching_factor": len(decision_actions),
+        "complete_plans": complete_plans,
+        "expected_tree_states": (len(decision_actions) ** (rounds + 1) - 1)
+        // (len(decision_actions) - 1),
+        "choices": [
+            {"name": name, **action.to_json()}
+            for name, action in zip(("A", "B", "C", "D"), decision_actions)
+        ],
+        "final_action": final_action.to_json(),
+        "tlc_statistics": stats,
+        "counterexample_path": counterexample,
+    }
+    duration_ms = observability.elapsed_ms(start)
+    observation = {
+        "run_id": run_id,
+        "duration_ms": duration_ms,
+        "stage_durations_ms": {
+            "evaluate_policy": 0,
+            "pluscal": pluscal_ms,
+            "tlc": tlc_ms,
+        },
+        "transformer_name": None,
+        "action_count": rounds + 1,
+        "policy_checker_enabled": False,
+        "model_checker_enabled": True,
+    }
+    response = {
+        "safe_to_execute": safe_to_execute,
+        "decision": "safe" if safe_to_execute else "requires_user_decision",
+        "input_mode": "branching",
+        "python_policy_enabled": False,
+        "normalized_actions": {"actions": []},
+        "decision_plan": decision_plan,
+        "python_policy_findings": [],
+        "all_findings": findings,
+        "pluscal": _public_checker_status(pluscal.to_json()),
+        "tlc": _public_checker_status(tlc),
+        "artifacts": {"generated": True},
+        "transformer_usage": {"mode": "branching_benchmark"},
+        "observability": observation,
+    }
+    (artifact_dir / "report.json").write_text(
+        json.dumps(response, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    observability.log_event(
+        logger,
+        "api.semantic_check.end",
+        status="ok",
+        input_mode="branching",
+        complete_plans=complete_plans,
+        distinct_states=stats.get("distinct_states"),
+        safe_to_execute=safe_to_execute,
+        duration_ms=duration_ms,
+    )
+    return response
+
+
 def _semantic_extraction_error_response(
     exc: SafetyInputError,
     transformer: OpenAIActionTransformer,
+    run_policy_checker: bool = True,
 ) -> Dict[str, Any]:
     return {
         "safe_to_execute": False,
         "decision": "extraction_failed",
+        "python_policy_enabled": run_policy_checker,
         "extraction_error": {
             "message": str(exc),
             "raw_model_output": getattr(transformer, "last_raw_content", ""),
@@ -628,8 +802,6 @@ def _semantic_extraction_error_response(
         "artifacts": {},
         "transformer_usage": getattr(transformer, "last_usage_estimate", {}),
         "observability": {"status": "extraction_failed"},
-        "violation_visualization": None,
-        "report": None,
     }
 
 
@@ -1033,7 +1205,6 @@ def _failed_safety_result(message: str, code: str = "safety_checker_error") -> T
             "finding_codes": [code],
             "model_checker_enabled": False,
         },
-        violation_visualization=None,
     )
 
 

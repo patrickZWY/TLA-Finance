@@ -1,4 +1,4 @@
-# TLA-Finance (AutomataSeal)
+# TLA-Finance
 
 TLA-Finance is a local finance safety workbench. You paste ambiguous finance
 advice into a browser UI, an OpenAI-compatible model normalizes it into
@@ -46,8 +46,16 @@ bounded FSIR path is driven by query parameters, for example
 `?case=core.06` (intentional no-action), and `?case=core.30&stage=4`
 (reference-only audit with approval disabled).
 
+The scenario picker also includes two standalone verification benchmarks:
+
+- a fixed 100-action plan whose first balance violation occurs at action 100;
+- an eight-round, four-way branching model with 65,536 possible decision
+  histories. This benchmark runs TLC without the Python policy mirror and
+  reports the exact counterexample path and explored-state count.
+
 TLC needs Java plus `tla2tools.jar`, located through `TLAPLUS_JAR` or
-`TLA_HOME`; see [docs/tla_setup_macos.md](docs/tla_setup_macos.md). Without
+`TLA_HOME`, or discovered from the TLA+ VS Code extension; see
+[docs/tla_setup_macos.md](docs/tla_setup_macos.md). Without
 it, uncheck **Run PlusCal/TLC** in the UI; TLC-backed runs report
 `not_configured` and the Python policy checks still run.
 

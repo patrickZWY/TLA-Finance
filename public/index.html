@@ -393,6 +393,7 @@
         </label>
         <div class="actions">
           <button class="primary" id="runBtn" onclick="runSemanticCheck()">Ask agent to review</button>
+          <label class="toggle"><input type="checkbox" id="runPolicy" checked /> Run Python checks</label>
           <label class="toggle"><input type="checkbox" id="runTlc" checked /> Run PlusCal/TLC</label>
           <label class="fixture-toggle"><input type="checkbox" id="fixtureReplay" /> Replay deterministic demo evidence</label>
         </div>
@@ -545,6 +546,33 @@
 
   <script src="/vendor/graph-view-1.0.0.js"></script>
   <script>
+    function buildStressActions() {
+      const route = [
+        ['checking', 'brokerage'],
+        ['brokerage', 'savings'],
+        ['savings', 'emergency'],
+        ['emergency', 'checking'],
+      ];
+      const actions = [];
+      for (let cycle = 0; cycle < 24; cycle += 1) {
+        const amount = 7 + ((cycle * 13) % 34);
+        route.forEach(([source, destination]) => actions.push({
+          action: 'transfer', amount, from: source, to: destination,
+        }));
+      }
+      route.slice(0, 3).forEach(([source, destination]) => actions.push({
+        action: 'transfer', amount: 37, from: source, to: destination,
+      }));
+      actions.push({ action: 'transfer', amount: 38, from: 'emergency', to: 'checking' });
+      return actions;
+    }
+
+    function describeActions(actions) {
+      return actions.map((action, index) =>
+        `${index + 1}. Transfer ${action.amount} from ${action.from} to ${action.to}.`
+      ).join('\n');
+    }
+
     const STORAGE_KEY = 'semantic_safety_workbench_v1';
     const examples = [
       {
@@ -598,6 +626,38 @@
           account_balances: { checking: 1200, brokerage: 0, savings: 200 },
           allowed_destination_accounts: ['brokerage'],
           allowed_action_types: ['buy', 'transfer'],
+        },
+      },
+      {
+        name: 'Branching benchmark: 4 choices × 8 rounds',
+        benchmark: 'four_way_liquidity',
+        user: 'Check every possible eight-round routing plan before the final settlement.',
+        advice: `At each of eight rounds, choose exactly one action:
+A. Transfer 1 from reserve to operations.
+B. Transfer 1 from checking to savings.
+C. Transfer 1 from savings to brokerage.
+D. Transfer 1 from brokerage to checking.
+
+After round 8, transfer 1 from reserve to payroll. Verify all 65,536 possible plans and every intermediate state.`,
+        policy: {
+          budget: 1000,
+          max_individual_action_amount: 1,
+          account_balances: { reserve: 8, operations: 100, checking: 100, savings: 100, brokerage: 100, payroll: 0 },
+          allowed_destination_accounts: ['operations', 'savings', 'brokerage', 'checking', 'payroll'],
+          allowed_action_types: ['transfer'],
+        },
+      },
+      {
+        name: '100 actions: violation only at step 100',
+        user: 'Verify this exact 100-action plan and identify the first unsafe transition.',
+        advice: describeActions(stressActions),
+        normalizedActions: { actions: stressActions },
+        policy: {
+          budget: 5000,
+          max_individual_action_amount: 50,
+          account_balances: { checking: 1000, brokerage: 0, savings: 0, emergency: 0 },
+          allowed_destination_accounts: ['checking', 'brokerage', 'savings', 'emergency'],
+          allowed_action_types: ['transfer'],
         },
       },
       {
@@ -814,7 +874,7 @@ The workbench shall evaluate both choices before approving either one.`,
       document.getElementById('clearLocalDataBtn').addEventListener('click', clearLocalData);
       document.getElementById('boundedApprovalBtn').addEventListener('click', approveBoundedScope);
       document.getElementById('fsirList').addEventListener('click', handleReviewControl);
-      ['userMessage', 'financeAdvice', 'policyBudget', 'policyMaxAction', 'policyBalances', 'policyDestinations', 'policyActionTypes', 'runTlc']
+      ['userMessage', 'financeAdvice', 'policyBudget', 'policyMaxAction', 'policyBalances', 'policyDestinations', 'policyActionTypes', 'runPolicy', 'runTlc']
         .forEach((id) => document.getElementById(id).addEventListener('change', () => {
           if (currentResult) invalidateEvidence('Inputs changed after verification; the displayed evidence is stale.');
         }));
@@ -862,13 +922,17 @@ The workbench shall evaluate both choices before approving either one.`,
       document.getElementById('financeAdvice').value = example.advice;
       fillPolicy(example.policy);
       const bounded = Boolean(example.bounded_case_id);
+      const branching = Boolean(example.benchmark);
+      const structured = Boolean(example.normalizedActions);
       const hero = example.bounded_case_id === 'core.30';
       document.getElementById('heroStageRow').classList.toggle('visible', hero);
       document.getElementById('heroStageSelect').value = String(example.hero_stage || 1);
       document.getElementById('fixtureReplay').checked = false;
       document.getElementById('fixtureReplay').disabled = bounded;
+      document.getElementById('runPolicy').checked = !branching;
+      document.getElementById('runPolicy').disabled = bounded || branching;
       document.getElementById('runTlc').checked = true;
-      document.getElementById('runTlc').disabled = bounded;
+      document.getElementById('runTlc').disabled = bounded || branching;
       ['policyBudget', 'policyMaxAction', 'policyBalances', 'policyDestinations', 'policyActionTypes']
         .forEach((id) => { document.getElementById(id).disabled = bounded; });
       document.getElementById('resetPolicyBtn').disabled = bounded;
@@ -878,7 +942,9 @@ The workbench shall evaluate both choices before approving either one.`,
       resetReviewSurface();
       setAgentState(UI_STATES.READY_FOR_REVIEW, bounded
         ? `Frozen ${example.bounded_case_id} selected. The server will resolve the approved corpus contract; local fields cannot override it.`
-        : 'Edit the goal and proposed plan, then ask the agent to review them.');
+        : (branching || structured
+          ? 'Review the concrete plan and checker configuration, then verify it.'
+          : 'Edit the goal and proposed plan, then ask the agent to review them.'));
       saveState();
     }
 
@@ -929,6 +995,12 @@ The workbench shall evaluate both choices before approving either one.`,
       clearError();
       const example = examples[Number(document.getElementById('exampleSelect').value || 0)];
       const boundedCaseId = example.bounded_case_id;
+      const runPolicy = document.getElementById('runPolicy').checked;
+      const runTlc = document.getElementById('runTlc').checked;
+      if (!boundedCaseId && !runPolicy && !runTlc) {
+        setError('Enable Python checks, PlusCal/TLC, or both.');
+        return;
+      }
       let policy;
       try {
         policy = readPolicy();
@@ -954,7 +1026,11 @@ The workbench shall evaluate both choices before approving either one.`,
       addActivity('user', `Goal submitted for review (${currentRunId}).`);
       addActivity('agent', 'Semantic extraction started; downstream checks remain gated on a valid interpretation.');
       setBadges([{ text: 'Verification in progress', kind: 'warn' }]);
-      document.getElementById('actionsJson').textContent = 'Running qwen3:4b extraction...';
+      document.getElementById('actionsJson').textContent = example.benchmark
+        ? 'Generating the complete branching state space...'
+        : (example.normalizedActions
+          ? `Loading ${example.normalizedActions.actions.length} concrete actions...`
+          : 'Extracting concrete actions...');
       document.getElementById('pythonFindings').innerHTML = '<div class="empty">Waiting for normalized actions.</div>';
       document.getElementById('tlcStatus').textContent = 'Waiting for policy and TLC result...';
       document.getElementById('artifactStatus').textContent = 'Artifacts will appear after the run.';
@@ -990,16 +1066,20 @@ The workbench shall evaluate both choices before approving either one.`,
           setSystemHealth('Deterministic fixture replay', 'warn');
           addActivity('agent', `Replayed deterministic fixture ${example.fixture_key}; no live model call was made.`);
         } else {
+          const request = {
+            user_message: document.getElementById('userMessage').value,
+            finance_advice: financeAdvice,
+            policy,
+            run_policy_checker: runPolicy,
+            run_model_checker: runTlc,
+          };
+          if (example.benchmark) request.benchmark = example.benchmark;
+          if (example.normalizedActions) request.normalized_actions = example.normalizedActions;
           const res = await fetch('/api/semantic-check', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             signal: currentController.signal,
-            body: JSON.stringify({
-              user_message: document.getElementById('userMessage').value,
-              finance_advice: financeAdvice,
-              policy,
-              run_model_checker: document.getElementById('runTlc').checked,
-            }),
+            body: JSON.stringify(request),
           });
           if (!res.ok) {
             const err = await res.json().catch(() => ({}));
@@ -1293,24 +1373,25 @@ The workbench shall evaluate both choices before approving either one.`,
       const policyFindings = data.python_policy_findings || [];
       const tlc = data.tlc || {};
       const pluscal = data.pluscal || {};
+      const branching = data.input_mode === 'branching';
+      const policyEnabled = data.python_policy_enabled !== false;
+      const actionCount = branching ? data.decision_plan?.complete_plans || 0 : (data.normalized_actions?.actions || []).length;
       const badges = [
         { text: data.decision === 'extraction_failed' ? 'Needs clarification' : (data.safe_to_execute ? 'Checks passed' : 'Plan blocked'), kind: data.safe_to_execute ? 'ok' : (data.decision === 'extraction_failed' ? 'warn' : 'bad') },
-        { text: `${(data.normalized_actions?.actions || []).length} action(s)`, kind: 'neutral' },
-        { text: `Python: ${policyFindings.length ? 'findings' : 'passed'}`, kind: policyFindings.length ? 'bad' : 'ok' },
+        { text: branching ? `${actionCount.toLocaleString()} complete plans` : `${actionCount} action(s)`, kind: 'neutral' },
+        { text: `Python: ${policyEnabled ? (policyFindings.length ? 'findings' : 'passed') : 'skipped'}`, kind: policyEnabled && policyFindings.length ? 'bad' : (policyEnabled ? 'ok' : 'warn') },
         { text: `TLC: ${tlc.status || 'unknown'}`, kind: tlc.status === 'passed' ? 'ok' : (tlc.status === 'skipped' ? 'warn' : 'bad') },
       ];
       setBadges(badges);
-      document.getElementById('actionsJson').textContent = JSON.stringify(data.normalized_actions || {}, null, 2);
-      if (data.extraction_error) {
-        renderFindings(data.all_findings || []);
-      } else {
-        renderFindings(policyFindings);
-      }
+      document.getElementById('actionsJson').textContent = JSON.stringify(branching ? data.decision_plan : (data.normalized_actions || {}), null, 2);
+      const displayedFindings = data.extraction_error || !policyEnabled ? (data.all_findings || []) : policyFindings;
+      renderFindings(displayedFindings, policyEnabled ? 'Python policy checks found no violations.' : 'Python policy checks were skipped.');
       document.getElementById('tlcStatus').textContent = JSON.stringify({
         pluscal_status: pluscal.status,
         tlc_status: tlc.status,
         pluscal_returncode: pluscal.returncode,
         tlc_returncode: tlc.returncode,
+        decision_plan: data.decision_plan,
         all_findings: data.all_findings,
       }, null, 2);
       document.getElementById('artifactStatus').textContent = JSON.stringify({
@@ -1321,6 +1402,13 @@ The workbench shall evaluate both choices before approving either one.`,
       renderFsirReview(data);
       renderBoundedVerdict(data);
       renderViolationVisualization(data.violation_visualization);
+      if (branching) {
+        const plan = data.decision_plan || {};
+        const path = (plan.counterexample_path || []).join(' → ') || 'No counterexample returned.';
+        document.getElementById('visualSummary').textContent = `TLC explored ${Number(plan.tlc_statistics?.distinct_states || 0).toLocaleString()} distinct states across ${Number(plan.complete_plans || 0).toLocaleString()} complete plans. Counterexample: ${path}`;
+        document.getElementById('visualizationBadge').textContent = data.safe_to_execute ? 'All branches passed' : 'Final-step counterexample found';
+        document.getElementById('visualizationBadge').className = `badge ${data.safe_to_execute ? 'ok' : 'bad'}`;
+      }
       setStages(data.decision === 'extraction_failed' ? 'review' : 'evidence');
     }
 
@@ -1331,7 +1419,9 @@ The workbench shall evaluate both choices before approving either one.`,
       const text = document.getElementById('verdictText');
       const tlcStatus = data.tlc?.status || 'unknown';
       const actionCount = data.normalized_actions?.actions?.length || 0;
-      const policy = readPolicy();
+      const branching = data.input_mode === 'branching';
+      const backend = data.python_policy_enabled === false ? `TLC/${tlcStatus}` : `Python + TLC/${tlcStatus}`;
+      const bounds = branching ? `${Number(data.decision_plan?.complete_plans || 0).toLocaleString()} plans · ${Number(data.decision_plan?.tlc_statistics?.distinct_states || 0).toLocaleString()} states` : `${actionCount} actions · $${readPolicy().budget} outflow`;
       hero.className = 'verdict-hero visible';
       document.getElementById('revisionBtn').style.display = 'none';
 
@@ -1368,8 +1458,8 @@ The workbench shall evaluate both choices before approving either one.`,
       }
       document.getElementById('verdictMeta').innerHTML = [
         `property: FinanceSafety`,
-        `backend: Python + TLC/${escapeHtml(tlcStatus)}`,
-        `bounds: ${actionCount} actions · $${policy.budget} outflow`,
+        `backend: ${escapeHtml(backend)}`,
+        `bounds: ${escapeHtml(bounds)}`,
         `model: ui-fsir/${escapeHtml(currentRunId || 'unversioned')}`,
       ].map((item) => `<span>${item}</span>`).join('');
     }
@@ -1600,7 +1690,19 @@ The workbench shall evaluate both choices before approving either one.`,
 
     function resetReviewSurface() {
       currentResult = null;
+      currentRunId = null;
       reviewStates = new Map();
+      setBadges([{ text: 'Not run', kind: '' }]);
+      document.getElementById('actionsJson').textContent = '{}';
+      document.getElementById('pythonFindings').innerHTML = '<div class="empty">No run yet.</div>';
+      document.getElementById('tlcStatus').textContent = 'No run yet.';
+      document.getElementById('artifactStatus').textContent = 'No run yet.';
+      document.getElementById('visualSummary').textContent = 'Run a check to populate bounded evidence.';
+      document.getElementById('journeyPanel').style.display = 'none';
+      document.getElementById('visualizationBadge').textContent = 'Run a check to populate evidence';
+      document.getElementById('visualizationBadge').className = 'badge';
+      hideViolationJourney();
+      renderTlcGraph({ status: 'unavailable', message: 'No formal check has run.' }, []);
       document.getElementById('fsirList').innerHTML = '<div class="empty">Run the agent to produce a source-linked, reviewable interpretation.</div>';
       document.getElementById('blockingQuestions').className = 'question-list';
       document.getElementById('fsirStatus').textContent = 'No draft';
@@ -1623,6 +1725,7 @@ The workbench shall evaluate both choices before approving either one.`,
       loadExample();
       localStorage.removeItem(STORAGE_KEY);
       document.getElementById('fixtureReplay').checked = false;
+      document.getElementById('runPolicy').checked = true;
       document.getElementById('runTlc').checked = true;
       currentResult = null;
       currentRunId = null;
@@ -1718,11 +1821,17 @@ The workbench shall evaluate both choices before approving either one.`,
       document.getElementById('boundedApprovalBtn').disabled = !controls.approve;
 
       const state = document.getElementById('agentStatus').dataset.state;
-      const boundedScenario = Boolean(examples[Number(document.getElementById('exampleSelect').value || 0)]?.bounded_case_id);
+      const scenario = examples[Number(document.getElementById('exampleSelect').value || 0)] || {};
+      const boundedScenario = Boolean(scenario.bounded_case_id);
+      const branchingScenario = Boolean(scenario.benchmark);
+      const fixedPlan = branchingScenario || Boolean(scenario.normalizedActions);
       const editable = controls.edit && !boundedScenario;
-      ['userMessage', 'financeAdvice'].forEach((id) => { document.getElementById(id).disabled = !editable; });
-      ['policyBudget', 'policyMaxAction', 'policyBalances', 'policyDestinations', 'policyActionTypes', 'runTlc', 'fixtureReplay']
+      document.getElementById('userMessage').disabled = !editable;
+      document.getElementById('financeAdvice').disabled = !editable || fixedPlan;
+      ['policyBudget', 'policyMaxAction', 'policyBalances', 'policyDestinations', 'policyActionTypes', 'fixtureReplay']
         .forEach((id) => { document.getElementById(id).disabled = !editable || boundedScenario; });
+      document.getElementById('runTlc').disabled = !editable || boundedScenario || branchingScenario;
+      document.getElementById('runPolicy').disabled = !editable || boundedScenario || branchingScenario;
       document.getElementById('exampleSelect').disabled = state === UI_STATES.VERIFICATION_RUNNING;
       document.querySelectorAll('#fsirList [data-review]').forEach((button) => {
         const decision = button.dataset.review;
@@ -1922,10 +2031,10 @@ The workbench shall evaluate both choices before approving either one.`,
       }
     }
 
-    function renderFindings(findings) {
+    function renderFindings(findings, emptyMessage = 'No configured check found a violation.') {
       const target = document.getElementById('pythonFindings');
       if (!findings.length) {
-        target.innerHTML = '<div class="empty">Python policy mirror found no violations.</div>';
+        target.innerHTML = `<div class="empty">${escapeHtml(emptyMessage)}</div>`;
         return;
       }
       target.innerHTML = '';
@@ -1933,7 +2042,9 @@ The workbench shall evaluate both choices before approving either one.`,
         const div = document.createElement('div');
         div.className = 'finding';
         const action = finding.action_index ? ` action ${finding.action_index}` : '';
-        div.innerHTML = `<strong>${escapeHtml(finding.code)}${action}</strong><br>${escapeHtml(finding.message)}`;
+        const path = finding.counterexample_path?.length
+          ? `<br><small>Counterexample: ${escapeHtml(finding.counterexample_path.join(' → '))}</small>` : '';
+        div.innerHTML = `<strong>${escapeHtml(finding.code)}${action}</strong><br>${escapeHtml(finding.message)}${path}`;
         target.appendChild(div);
       });
     }
